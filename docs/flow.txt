@@ -1,0 +1,116 @@
+SDK machine, database, and HTTP flow
+
+Identity
+  Every SQLite table uses id INTEGER PRIMARY KEY AUTOINCREMENT.
+  machine_profiles.id is the numeric machine/profile identity used by orders,
+  results, statistics, registry state, and HTTP routes.
+  A driver's registered ID remains a stable string in machine_profiles.driver_id.
+  Foreign keys use the numeric profile, order, and result IDs.
+
+MachineManager
+  Responsibility: application lifecycle and the optional HTTP server.
+  getHandler() initializes the registry/machines and returns the framework-
+  neutral (Request) -> Promise<Response> API handler. Deno.serve is only the
+  built-in optional host; another compatible framework can use that handler.
+  Startup:
+    await registry.connectDatabase()
+    profiles = await registry.listEnabledProfiles()
+    await registry.startProfiles(profiles)
+    start the HTTP server when enabled
+    await the optional callback when HTTP is enabled
+  Shutdown:
+    SIGINT/SIGTERM invokes manager.shutdown()
+    stop the HTTP server
+    await registry.shutdown()
+
+MachineRegistry
+  Responsibility: the only application boundary allowed to coordinate SQLite
+  stores and live machine/driver instances.
+  It provides profile, order, result, and test-statistic operations to HTTP and
+  the manager. Neither of those layers receives the database or a raw machine.
+  Driver classes are registered directly, for example register(IFlash3000).
+  Each class owns static ID/brand/models/schema metadata and has a zero-argument
+  constructor. For every enabled profile the registry constructs the driver,
+  calls machine.configure(profile.config), and only then binds events, connects,
+  synchronizes pending orders, and starts the protocol. The driver alone parses
+  its opaque configuration. Invalid configuration therefore opens no transport.
+  A profile enters the running map only after configuration, connection,
+  pending-order sync, and start succeed. A startup failure shuts down that
+  machine and removes handlers.
+  Stopping one profile shuts down only its machine, protocol, and transport.
+  It does not close the shared database or affect other running profiles.
+  registry.shutdown() stops every running profile and then closes the database.
+
+HTTP
+  routes.ts is only the dispatcher and receives MachineRegistry.
+  profile.routes.ts manages profile CRUD and start/stop operations.
+  orders.routes.ts manages order CRUD and submits/stages new orders.
+  results.routes.ts provides read-only result audit access.
+  testStatistics.routes.ts reads or resets learned duration statistics.
+  Each route validates its body, path IDs, and query parameters with a strict
+  Zod schema before calling the registry.
+  HttpError responses preserve their intended status, such as 400 validation
+  errors and 404 missing-resource errors. Unexpected errors remain HTTP 500.
+  Driver, running-machine, and catalog data are loaded only in the matching
+  endpoint, no database or registry query runs eagerly for unrelated requests.
+
+Order and analyzer query
+  A machine profile can have only one pending/testing order for a sample ID.
+  The registry checks this before insert/update, and SQLite enforces it with a
+  partial unique index. Completed/failed history does not prevent later reuse
+  of the same sample ID.
+  registry.submitOrder() stores a pending order and calls driver.sendOrder().
+  iFlash sendOrder() stages the order in memory, it does not transmit immediately.
+  When the analyzer sends an ASTM order query, iFlash finds the staged sample and
+  sends the ASTM response. After successful transmission it emits order-sent.
+  Registry handles order-sent and changes the stored order to testing with its
+  actual start and estimated-completion timestamps.
+  Already-expired orders are rejected at submission. Pending orders that expire
+  while staged or while the service is stopped are marked failed and are never
+  sent to the analyzer.
+  POST /orders/:orderId/resend manually stages the same failed or pending order
+  again without inserting a new row. It preserves the order ID and request
+  details, clears old failure/processing fields, recalculates the learned
+  estimate, and refreshes an expired deadline by 24 hours. Testing/completed
+  orders cannot be resent because the analyzer may already be processing them
+  or immutable result history may already exist.
+
+Result and learned-duration update
+  One machine_results row belongs to one order and contains one results JSON
+  array. The array can contain multiple analyte/test objects. raw preserves the
+  original analyzer message for audit and troubleshooting.
+  Registry matches an incoming result only to the active testing/pending order
+  for the same numeric machine profile and sample ID. It never falls back to a
+  completed or failed historical order.
+  Result insertion, order completion, and per-test statistic updates happen in
+  one SQLite transaction.
+  machine_test_statistics stores one row per numeric machine profile + test ID.
+  First completion creates the row. Later completions update last-order data,
+  count, and the correctly weighted running average:
+    new average = ((old average * old count) + new duration) / (old count + 1)
+  An estimate is returned only when statistics exist for every requested test,
+  parallel test execution uses the longest learned average.
+
+Machine and protocol layers
+  MachineCom owns TCP-server, TCP-client, or serial transport I/O.
+  BaseProtocol owns the read loop, serialized writes, and message callback.
+  AstmProtocol parses ASTM frames, sends ASTM responses, and forwards complete
+  messages through BaseProtocolOptions.onMessage.
+  BaseMachine requires configure(unknown) plus the connect/start/shutdown
+  lifecycle and owns typed on()/off() event handlers.
+  Registry registers handlers with on() and removes those exact callbacks with
+  off() whenever a profile stops, preventing stale or duplicated handlers.
+  iFlash owns ASTM-specific order/result behavior and never accesses SQLite.
+
+SQLite stores
+  SqliteMachineDatabase owns the connection, fresh schema creation, stores,
+  and cross-store transactions. An empty data directory creates the schema
+  directly.
+  Completed orders/results are audit history. Result foreign keys use RESTRICT,
+  completed orders cannot be deleted, and a profile cannot be deleted while
+  orders, results, or statistics still reference it.
+  Only store classes execute table-level SQL:
+    MachineProfileStore       -> machine_profiles
+    MachineOrderStore         -> machine_orders
+    MachineResultStore        -> machine_results
+    MachineTestStatisticStore -> machine_test_statistics

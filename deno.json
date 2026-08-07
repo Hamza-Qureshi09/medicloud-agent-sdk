@@ -1,0 +1,49 @@
+{
+	"tasks": {
+		"start": "deno run --env-file --allow-net --allow-read --allow-write --allow-env --allow-run main.ts",
+		"dev": "deno run --env-file --watch --allow-net --allow-read --allow-write --allow-env --allow-run main.ts",
+		"dev:all": "deno run --env-file=.env --watch-hmr --allow-all main.ts",
+		"test": "deno run --allow-all test.ts",
+		"compile:serial-setup:win": "deno compile --allow-run --allow-env --allow-read --allow-write --env-file=.env --target x86_64-pc-windows-msvc --output ./binaries/serial-setup.exe ../src/tools/serial-setup.ts",
+		"compile:middleware:win": "deno compile --allow-net --allow-run --allow-env --allow-read --allow-write --env-file=.env --target x86_64-pc-windows-msvc --output ./binaries/lis-middleware.exe ./main.ts"
+	},
+	"lint": {
+		"include": ["./"],
+		"exclude": ["node_modules/"],
+		"rules": {
+			"tags": ["recommended"],
+			"include": [
+				"ban-untagged-todo",
+				"no-explicit-any",
+				"no-non-null-assertion",
+				"prefer-as-const",
+				"no-unsafe-finally",
+				"ban-untagged-ignore",
+				"eqeqeq",
+				"no-eval"
+			],
+			"exclude": [
+				"no-unused-vars",
+				"no-console",
+				"require-await"
+			]
+		}
+	},
+	"fmt": {
+		"useTabs": true,
+		"lineWidth": 80,
+		"indentWidth": 4,
+		"semiColons": true,
+		"singleQuote": true,
+		"proseWrap": "preserve",
+		"include": ["./"],
+		"exclude": ["node_modules/"]
+	},
+	"compilerOptions": {
+		"strict": true
+	},
+	"imports": {
+		"@std/assert": "jsr:@std/assert@1",
+		"@zod/zod": "jsr:@zod/zod@^4.4.3"
+	}
+}

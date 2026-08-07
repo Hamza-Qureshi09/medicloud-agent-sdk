@@ -1,0 +1,218 @@
+SDK v3 Fixes and Reasoning
+===========================
+
+Purpose
+-------
+- This file records important bug fixes and why they exist.
+- Keep this file practical: describe the failure, the safe behavior, and the
+  implementation boundary.
+
+Applied fixes
+-------------
+
+1. Active order conflict guard
+------------------------------
+Problem:
+- A second pending/testing order for the same machine and sample can replace or
+  confuse an already staged analyzer order.
+- Driver-side maps usually key staged work by sampleId, so duplicate active
+  rows are dangerous even if SQLite accepts them.
+
+Fix:
+- Registry checks every new active order with:
+  - assertOrderNotExpired(pendingOrder)
+  - assertNoActiveOrderConflict(pendingOrder.machineId, pendingOrder.sampleId)
+- Registry also checks active updates/resends with the current order ID ignored
+  so an order can update itself without conflicting with itself.
+- SQLite has a partial unique index:
+  - idx_machine_orders_active_sample on machine_id + sample_id
+  - only for status IN ('pending', 'testing')
+
+Reasoning:
+- The registry gives a clear application error before staging bad work.
+- The database index is the final protection against races or missed checks.
+- Completed/failed historical orders remain allowed for the same sample.
+
+2. Pending connection cleanup
+-----------------------------
+Problem:
+- MachineCom creates a pending TCP accept promise for tcp-server profiles.
+- If the promise is observed only through finally(), rejected accepts can become
+  unhandled promise noise when a listener is closed during shutdown.
+
+Fix:
+- MachineCom uses:
+  - void pending.finally(() => this.clearPendingConnection(pending)).catch(() => undefined)
+
+Reasoning:
+- finally() performs state cleanup for success and failure.
+- catch() intentionally consumes the cleanup chain rejection only; real protocol
+  read/write errors still travel through the driver error path.
+- void makes it clear the cleanup promise is intentionally fire-and-forget.
+
+3. Real connected event timing
+------------------------------
+Problem:
+- TCP server profiles used to emit connected when the SDK started listening.
+- Listening means the port is open; it does not mean the analyzer has connected.
+
+Fix:
+- Machine drivers call MachineCom.whenConnected() after connect().
+- whenConnected() resolves only when an actual connection exists or the pending
+  listener accept completes.
+- iFlash and Maglumi mark connected only after that promise resolves.
+
+Reasoning:
+- Health/running status becomes more honest.
+- Analyzer communication startup can still be non-blocking because protocol
+  reads wait for the analyzer in the background.
+
+4. Independent profile startup
+------------------------------
+Problem:
+- One bad enabled profile during SDK boot could roll back already started
+  machines.
+- That makes one disconnected, misconfigured, or unavailable analyzer affect
+  unrelated analyzers.
+
+Fix:
+- startProfiles() starts each enabled profile independently.
+- A failed profile logs its own startup error and the loop continues.
+
+Reasoning:
+- Multi-machine SDK startup should be isolated.
+- Manual start endpoints still return errors for the specific profile being
+  started, so operational failures are not hidden.
+
+5. Disconnected runtime cleanup
+-------------------------------
+Problem:
+- A TCP server accepts one analyzer connection for a running profile.
+- If the analyzer disconnects, the protocol closes and the old runtime entry can
+  become stale.
+- A stale running entry blocks startStoredProfile() and can require manual stop
+  before restart.
+
+Fix:
+- The registry removes the matching machine from running when the driver emits
+  disconnected.
+- startStoredProfile() shuts down and removes stale non-running runtime entries
+  before creating a fresh driver instance.
+
+Reasoning:
+- One disconnected machine no longer blocks other running machines.
+- Restarting a disconnected profile becomes clean and deterministic.
+- The current SDK does not auto-reconnect a TCP-server profile by itself; use
+  POST /profiles/:machineId/start to open a new listener after disconnect.
+
+6. Expired pending order cleanup
+--------------------------------
+Problem:
+- Expiry cleanup only handled query events that included a sampleId.
+- Maglumi query-all sends an empty sampleId, so expired staged orders could stay
+  pending and be returned in query-all worklists.
+
+Fix:
+- Registry failExpiredPendingOrders() handles both paths:
+  - sample query: checks the one pending order for that sample
+  - query-all: checks all pending orders for the machine
+- Maglumi also filters expired staged orders before building a query-all
+  response.
+
+Reasoning:
+- Registry remains the source of persisted order status.
+- Driver filtering is a second runtime safety check before analyzer output.
+- Expired orders are marked failed with a consistent reason and removed from the
+  driver staging map when possible.
+
+7. Profile update during startup
+--------------------------------
+Problem:
+- A profile can be in the starting map before it reaches the running map.
+- PATCH /profiles/:machineId with enabled false during that window could update
+  SQLite but leave the starting machine alive.
+- Driver/config changes during startup could also race against the driver that
+  was already being configured.
+
+Fix:
+- updateProfile() now treats both running and starting machines as active.
+- Driver/config changes are blocked while the profile is running or starting.
+- Disabling a running or starting profile goes through stopProfile().
+- Metadata updates while a profile is starting wait for the existing start
+  operation and then refresh the running profile view.
+
+Reasoning:
+- Profile state in SQLite and runtime state stay aligned.
+- The registry remains the only lifecycle boundary.
+- No extra reconnect or background supervisor complexity is introduced.
+
+8. Result persistence before staged-order removal
+-------------------------------------------------
+Problem:
+- iFlash, Maglumi, and Roche removed a staged order before the registry result
+  handler had successfully stored the result.
+- A database or event-handler failure therefore lost the in-memory order and
+  prevented a clean retry.
+
+Fix:
+- All three drivers now await the existing result event first.
+- The driver removes the staged order only after the registry handler succeeds.
+- Maglumi and Roche continue clearing their in-memory duplicate marker when the
+  result handler fails.
+
+Reasoning:
+- Result storage remains owned by the registry.
+- A failed persistence attempt leaves the staged order available for retry.
+- No protocol, payload, database-schema, or driver-structure change is needed.
+
+9. Active-driver unregister guard
+---------------------------------
+Problem:
+- unregister() originally checked only running machines.
+- A driver could be removed while one of its machine instances was still in the
+  registry starting map.
+
+Fix:
+- unregister() checks both running profiles and starting machine instances.
+
+Reasoning:
+- A driver registration remains available for the full machine lifecycle.
+- The fix uses the existing running and starting maps without new state.
+
+10. Stopped-during-startup guard
+--------------------------------
+Problem:
+- A protocol could close during the asynchronous startup handoff.
+- The registry could then add the already-stopped machine to its running map.
+
+Fix:
+- startMachine() verifies machine.isRunning immediately after machine.start().
+- A stopped machine follows the existing startup cleanup/error path instead of
+  being registered as running.
+
+Reasoning:
+- Registry runtime state cannot claim that a stopped driver is running.
+- Existing machine state and cleanup behavior are reused.
+
+Current audit result
+--------------------
+- iFlash and Maglumi startup flow is consistent:
+  registry -> driver configure -> MachineCom tcp-server listen -> ASTM protocol
+  start -> real analyzer connection -> connected event.
+- Roche cobas c111 startup flow is consistent:
+  registry -> driver configure -> MachineCom serial open -> Roche ASTM variant
+  start -> serial connection -> connected event.
+- Order flow is consistent:
+  HTTP order -> registry validation/database insert -> driver staging -> analyzer
+  query -> driver response -> order-sent -> testing status.
+- Result flow is consistent:
+  analyzer result -> driver parser/mapper -> registry persistResult -> result
+  insert -> order completed -> learned test statistics update.
+- No serious remaining bug was found in the audited iFlash, Maglumi, Roche,
+  registry, and machine-manager flow.
+- Known limitation: disconnected profiles require an explicit restart.
+  TCP-server profiles do not automatically relisten, and the current serial
+  transport performs one open attempt even though the Cobas profile retains a
+  reconnectDelayMs setting for compatibility. Automatic supervision is not
+  implemented because it needs a deliberate lifecycle design to avoid
+  restarting during intentional shutdown.
