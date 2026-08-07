@@ -1,0 +1,575 @@
+
+HTTP route map
+==============
+
+Base URL
+--------
+- Default local server:
+  - http://localhost:5000
+- Configured through sdk_v3/.env:
+  - MEDICLOUD_MACHINES_HTTP_ENABLED=true
+  - MEDICLOUD_MACHINES_HTTP_HOST=localhost
+  - MEDICLOUD_MACHINES_HTTP_PORT=5000
+  - MEDICLOUD_MACHINES_DB_PATH=./data/machines.db
+
+Route rules
+-----------
+- Every JSON request must send:
+  - Content-Type: application/json
+- Route bodies and query strings are strict.
+- Unknown JSON fields are rejected.
+- Positive path IDs must be safe positive integers.
+- limit is positive when supplied.
+- offset is zero or positive when supplied.
+- Date fields accept valid date strings and are stored as Date values.
+
+Common responses
+----------------
+- Success responses are JSON unless the route explicitly returns 204.
+- Validation errors return:
+  - { "error": "..." }
+- Unexpected errors return:
+  - { "error": "internal error", "detail": "..." }
+
+
+System routes
+=============
+
+OPTIONS /*
+---------
+Purpose:
+- CORS preflight support.
+
+Payload:
+- None.
+
+Response:
+- 204 No Content.
+
+Example:
+- curl -i -X OPTIONS http://localhost:5000/health
+
+
+GET /health
+-----------
+Purpose:
+- Verify SDK HTTP server, registered drivers, and currently running machines.
+
+Payload:
+- None.
+
+Response shape:
+- {
+    "status": "ok",
+    "registered_drivers": [],
+    "running_machines": []
+  }
+
+Example:
+- curl http://localhost:5000/health
+
+
+GET /drivers
+------------
+Purpose:
+- List all registered machine drivers.
+
+Query:
+- id optional driver ID filter.
+- brand optional brand filter.
+
+Examples:
+- curl http://localhost:5000/drivers
+- curl "http://localhost:5000/drivers?id=iflash3000"
+- curl "http://localhost:5000/drivers?brand=SNIBE"
+
+Current driver IDs:
+- iflash3000
+- snibe-maglumi-800
+- roche-cobas-c111
+
+Response shape:
+- {
+    "drivers": [
+      { "id": "iflash3000", "brand": "YHLO", "models": ["..."] }
+    ]
+  }
+
+
+GET /catalogs
+-------------
+Purpose:
+- List available analyzer catalogs or inspect one catalog.
+
+Query:
+- driver optional driver/catalog ID filter.
+- machine optional machine name or ID filter.
+
+Examples:
+- curl http://localhost:5000/catalogs
+- curl "http://localhost:5000/catalogs?driver=iflash3000"
+- curl "http://localhost:5000/catalogs?driver=snibe-maglumi-800"
+- curl "http://localhost:5000/catalogs?driver=roche-cobas-c111"
+
+List response shape:
+- {
+    "catalogs": [
+      {
+        "id": "iflash3000",
+        "driverId": "iflash3000",
+        "machine": "YHLO iFlash 3000",
+        "catalogCount": 0
+      }
+    ]
+  }
+
+Single catalog response:
+- Full catalog object with tests array.
+
+
+Profile routes
+==============
+
+GET /profiles
+-------------
+Purpose:
+- List every stored machine profile from SQLite.
+
+Payload:
+- None.
+
+Example:
+- curl http://localhost:5000/profiles
+
+Response shape:
+- { "profiles": [] }
+
+
+POST /profiles
+--------------
+Purpose:
+- Create a stored machine profile.
+- If enabled is true, the registry starts the driver immediately.
+
+Payload fields:
+- driverId required string.
+- name optional string.
+- enabled optional boolean; default false.
+- config required object; driver-specific.
+
+iFlash payload:
+- {
+    "driverId": "iflash3000",
+    "name": "iFlash lab analyzer",
+    "enabled": true,
+    "config": {
+      "host": "0.0.0.0",
+      "port": 7001,
+      "queryReplyDelayMs": 0
+    }
+  }
+
+Maglumi payload:
+- {
+    "driverId": "snibe-maglumi-800",
+    "name": "MAGLUMI 800",
+    "enabled": true,
+    "config": {
+      "host": "0.0.0.0",
+      "port": 7002,
+      "queryReplyDelayMs": 0
+    }
+  }
+
+Roche cobas c111 payload:
+- {
+    "driverId": "roche-cobas-c111",
+    "name": "Roche cobas c111",
+    "enabled": true,
+    "config": {
+      "serialPort": "COM3",
+      "baud": 9600,
+      "dataBits": 8,
+      "stopBits": 1,
+      "parity": "n",
+      "flowControl": "xonxoff",
+      "reconnectDelayMs": 5000,
+      "replyToQueries": false,
+      "pushOrders": false,
+      "pushIntervalMs": 1000,
+      "resultPollingEnabled": true,
+      "resultPollInitialDelayMs": 60000,
+      "resultPollIntervalMs": 60000,
+      "estimatedMinutes": 12,
+      "hostSenderName": "ASTM-Host",
+      "analyzerName": "c111",
+      "defaultComment": "Default TS"
+    }
+  }
+
+Roche config notes:
+- serialPort matches tested src config and maps internally to MachineCom portName.
+- parity is the normalized SDK/runtime value. Source env "none" becomes "n".
+- flowControl is the normalized SDK/runtime value. Source env "sw" becomes
+  "xonxoff".
+- replyToQueries defaults to false exactly like the tested src config.
+- estimatedMinutes defaults to 12 and is used when Roche marks an order as
+  testing, matching the tested src driver behavior.
+
+Example:
+- curl -X POST http://localhost:5000/profiles -H "Content-Type: application/json" -d "{\"driverId\":\"snibe-maglumi-800\",\"name\":\"MAGLUMI 800\",\"enabled\":true,\"config\":{\"host\":\"0.0.0.0\",\"port\":7002}}"
+
+Response:
+- 201 { "profile": { ... } }
+
+
+GET /profiles/:machineId
+------------------------
+Purpose:
+- Read one stored profile by numeric profile ID.
+
+Payload:
+- None.
+
+Example:
+- curl http://localhost:5000/profiles/1
+
+Response:
+- { "profile": { ... } }
+
+
+PATCH /profiles/:machineId
+--------------------------
+Purpose:
+- Update profile metadata, enabled state, driverId, or config.
+- driverId/config can change only while the profile is not running.
+- Setting enabled false stops a running profile.
+- Setting enabled true starts a stopped profile.
+
+Payload fields:
+- driverId optional string.
+- name optional string or null.
+- enabled optional boolean.
+- config optional object.
+- At least one field is required.
+
+Payload examples:
+- { "name": "Main iFlash" }
+- { "enabled": false }
+- { "enabled": true }
+- { "config": { "host": "0.0.0.0", "port": 7001 } }
+
+Example:
+- curl -X PATCH http://localhost:5000/profiles/1 -H "Content-Type: application/json" -d "{\"enabled\":false}"
+
+Response:
+- { "profile": { ... } }
+
+
+DELETE /profiles/:machineId
+---------------------------
+Purpose:
+- Delete a stored profile.
+- Deletion is blocked when orders, results, or test statistics still reference
+  the profile.
+
+Payload:
+- None.
+
+Example:
+- curl -X DELETE http://localhost:5000/profiles/1
+
+Response:
+- { "success": true, "id": 1 }
+
+
+POST /profiles/:machineId/start
+-------------------------------
+Purpose:
+- Enable and start a stored profile.
+- Also cleans stale disconnected runtime entries before creating a new driver.
+
+Payload:
+- None.
+
+Example:
+- curl -X POST http://localhost:5000/profiles/1/start
+
+Response:
+- { "started": true, "profile": { ... } }
+
+Notes:
+- If the profile is already running, started is false.
+- After a TCP analyzer disconnects, use this route to open a fresh listener.
+
+
+POST /profiles/:machineId/stop
+------------------------------
+Purpose:
+- Stop a running/starting profile and disable it in SQLite.
+
+Payload:
+- None.
+
+Example:
+- curl -X POST http://localhost:5000/profiles/1/stop
+
+Response:
+- { "stopped": true, "profile": { ... } }
+
+
+Order routes
+============
+
+GET /orders
+-----------
+Purpose:
+- List stored orders.
+
+Query:
+- machineId optional positive integer.
+- sampleId optional string.
+- status optional pending, testing, completed, or failed.
+- limit optional positive integer.
+- offset optional non-negative integer.
+
+Examples:
+- curl http://localhost:5000/orders
+- curl "http://localhost:5000/orders?machineId=1&status=pending"
+- curl "http://localhost:5000/orders?sampleId=SAMPLE001&limit=20&offset=0"
+
+Response:
+- { "orders": [] }
+
+
+POST /orders
+------------
+Purpose:
+- Create a pending order and stage it inside the running machine driver.
+- The analyzer receives it later when it sends an order query.
+
+Payload fields:
+- machineId required numeric profile ID.
+- sampleId required string.
+- tests required non-empty string array.
+- patientId optional string.
+- patientName optional string.
+- dob optional string.
+- sex optional string.
+- species optional string.
+- sampleType optional string.
+- rackPosition optional string.
+- raw optional any JSON value.
+- createdAt optional valid date string; default now.
+- expiresAt optional valid date string; default createdAt + 24 hours.
+
+Payload example:
+- {
+    "machineId": 1,
+    "sampleId": "SAMPLE001",
+    "patientId": "P001",
+    "patientName": "Test Patient",
+    "sex": "M",
+    "sampleType": "SERUM",
+    "tests": ["TSH", "FT4"],
+    "expiresAt": "2026-07-29T10:00:00.000Z"
+  }
+
+Example:
+- curl -X POST http://localhost:5000/orders -H "Content-Type: application/json" -d "{\"machineId\":1,\"sampleId\":\"SAMPLE001\",\"tests\":[\"TSH\",\"FT4\"]}"
+
+Response:
+- 201 { "order": { ... } }
+
+Important behavior:
+- Requires the target profile to be running.
+- Rejects expired orders.
+- Rejects another pending/testing order for the same machineId + sampleId.
+
+
+GET /orders/:orderId
+--------------------
+Purpose:
+- Read one stored order.
+
+Payload:
+- None.
+
+Example:
+- curl http://localhost:5000/orders/1
+
+Response:
+- { "order": { ... } }
+
+
+PATCH /orders/:orderId
+----------------------
+Purpose:
+- Update an editable order.
+- Completed orders cannot be changed.
+- Active pending/testing orders are restaged in the running driver when the
+  machine is running and supports orders.
+
+Payload fields:
+- sampleId optional string.
+- tests optional non-empty string array.
+- patientId optional string.
+- patientName optional string.
+- dob optional string.
+- sex optional string.
+- species optional string.
+- sampleType optional string.
+- rackPosition optional string.
+- raw optional any JSON value.
+- expiresAt optional valid date string.
+- At least one field is required.
+
+Payload example:
+- {
+    "tests": ["TSH"],
+    "rackPosition": "A1",
+    "expiresAt": "2026-07-29T10:00:00.000Z"
+  }
+
+Example:
+- curl -X PATCH http://localhost:5000/orders/1 -H "Content-Type: application/json" -d "{\"tests\":[\"TSH\"]}"
+
+Response:
+- { "order": { ... } }
+
+
+POST /orders/:orderId/resend
+----------------------------
+Purpose:
+- Stage the same failed or pending order again without creating a new row.
+- Expired failed/pending orders receive a fresh 24-hour expiry window.
+
+Payload:
+- None.
+
+Example:
+- curl -X POST http://localhost:5000/orders/1/resend
+
+Response:
+- { "order": { ... } }
+
+Important behavior:
+- Only failed or pending orders can be resent.
+- Requires the target profile to be running.
+- Recalculates learned duration estimate when available.
+
+
+DELETE /orders/:orderId
+-----------------------
+Purpose:
+- Delete a non-completed order.
+- If pending/testing and the machine is running, the order is removed from the
+  driver staging map first.
+
+Payload:
+- None.
+
+Example:
+- curl -X DELETE http://localhost:5000/orders/1
+
+Response:
+- { "success": true, "id": 1 }
+
+Important behavior:
+- Completed orders or orders with result history are immutable and cannot be
+  deleted.
+
+
+Result routes
+=============
+
+GET /results
+------------
+Purpose:
+- List immutable result audit records.
+
+Query:
+- orderId optional positive integer.
+- machineId optional positive integer.
+- sampleId optional string.
+- limit optional positive integer.
+- offset optional non-negative integer.
+
+Examples:
+- curl http://localhost:5000/results
+- curl "http://localhost:5000/results?machineId=1&sampleId=SAMPLE001"
+- curl "http://localhost:5000/results?orderId=1"
+
+Response:
+- { "results": [] }
+
+
+GET /results/:resultId
+----------------------
+Purpose:
+- Read one immutable result audit record.
+
+Payload:
+- None.
+
+Example:
+- curl http://localhost:5000/results/1
+
+Response:
+- { "result": { ... } }
+
+
+Test statistic routes
+=====================
+
+GET /test-statistics
+--------------------
+Purpose:
+- List learned test turnaround statistics.
+- These values are used by the registry to estimate order duration.
+
+Query:
+- machineId optional positive integer.
+- testId optional string.
+- limit optional positive integer.
+- offset optional non-negative integer.
+
+Examples:
+- curl http://localhost:5000/test-statistics
+- curl "http://localhost:5000/test-statistics?machineId=1"
+- curl "http://localhost:5000/test-statistics?machineId=1&testId=TSH"
+
+Response:
+- { "statistics": [] }
+
+
+GET /test-statistics/:statisticId
+---------------------------------
+Purpose:
+- Read one learned test statistic row.
+
+Payload:
+- None.
+
+Example:
+- curl http://localhost:5000/test-statistics/1
+
+Response:
+- { "statistic": { ... } }
+
+
+DELETE /test-statistics/:statisticId
+------------------------------------
+Purpose:
+- Delete one learned test statistic row.
+- Useful when learned timing is wrong and should be recalculated from future
+  completed orders.
+
+Payload:
+- None.
+
+Example:
+- curl -X DELETE http://localhost:5000/test-statistics/1
+
+Response:
+- 204 No Content.

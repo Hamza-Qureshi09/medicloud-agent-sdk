@@ -1,0 +1,224 @@
+SDK v3 Structure Rules
+======================
+
+Important migration rule
+------------------------
+- The legacy src/ implementation is treated as tested reference code.
+- Do not edit src/ while migrating machines into sdk_v3/.
+- When adding a machine to sdk_v3/, copy the proven workflow/field behavior
+  from src/ and reorganize it without changing analyzer semantics.
+
+Core layers
+-----------
+- MachineCom selects, opens, and owns the low-level transport connection.
+  - TCP server
+  - TCP client
+  - Serial connection through SerialConn and the Node serial helper
+  - Exposes RawConnection to protocols
+
+- SerialConn owns the raw Node-helper stream for a serial connection.
+  - Queues received byte chunks
+  - Tracks write acknowledgements from the helper
+  - Rejects pending opens/writes when the helper or connection closes
+
+- BaseProtocol is the parent class for protocol implementations.
+  - Owns read loop, write serialization, lifecycle state, close/error hooks
+  - Protocols extend BaseProtocol when they parse bytes/messages directly
+
+- protocols/ contains reusable protocol mechanics.
+  - No analyzer workflow
+  - No machine catalog
+  - No order/result business mapping
+  - No database access
+
+- machines/<machine>/ contains analyzer-specific behavior.
+  - Configuration schema
+  - Driver lifecycle
+  - Machine workflow
+  - Query handling
+  - Order staging/removal
+  - Inbound result mapping
+  - Outbound order/result response builders
+  - Catalog/test-code mapping
+
+- MachineRegistry owns application state and driver orchestration.
+  - Registers driver classes
+  - Starts/stops configured machine profiles
+  - Stores orders/results/statistics
+  - Synchronizes pending/testing orders into running drivers
+
+- MachineManager owns SDK startup/shutdown and HTTP handler/server wiring.
+
+Protocol rules
+--------------
+- Protocol folders are named by protocol, not by analyzer.
+- Machine-specific names stay inside machines/<machine>/.
+- protocols/astm defines what options exist.
+- machines/<machine>/astm.ts defines which protocol options that machine uses.
+- Keep framing/options close to the driver when those options are only used by
+  that machine.
+- Extend or add a protocol variant only when byte/session behavior changes.
+- Keep machine field meanings inside the machine driver, not protocol core.
+
+ASTM structure
+--------------
+sdk_v3/protocols/astm/
+  link.ts        Generic AstmProtocol extending BaseProtocol
+  records.ts     ASTM record parse/build/escape helpers
+  checksum.ts    ASTM checksum helper
+  constants.ts   ASTM control-byte constants
+  variants/      Future protocol variants when options are not enough
+
+Machine ASTM option files
+-------------------------
+- Each ASTM-based machine owns its option object in machines/<machine>/astm.ts.
+- Option objects should use AstmProtocolOptions from protocols/astm/link.ts.
+- Do not add a shared protocol preset unless multiple machines truly reuse the
+  exact same behavior and sharing makes the code clearer.
+- For one-machine behavior, keep the options local to that machine.
+
+Current iFlash ASTM options
+---------------------------
+- Defined in sdk_v3/machines/iflash/astm.ts.
+- Full ASTM frames.
+- Frame number required.
+- Checksum required.
+- One record per frame.
+- ETX for intermediate frames.
+- ETB for final frame.
+- ETB final behavior is kept because it matches the already implemented
+  sdk_v3 iFlash behavior.
+
+iFlash structure
+----------------
+sdk_v3/machines/iflash/
+  iFlash3000.ts  Driver lifecycle and workflow
+  astm.ts        iFlash ASTM option selection
+  inbound.ts     iFlash query/result parsing
+  outbound.ts    iFlash order/no-order ASTM response builders
+  catalog.ts     iFlash test catalog and code validation
+
+iFlash flow
+-----------
+1. Registry creates IFlash3000 from the registered driver.
+2. IFlash3000.configure validates profile config.
+3. IFlash3000.connect creates MachineCom using tcp-server config.
+4. IFlash3000 creates AstmProtocol with IFLASH_ASTM_OPTIONS.
+5. AstmProtocol receives ASTM records and passes them to the driver.
+6. inbound.ts converts records into query/result meaning.
+7. Driver replies to Q records using outbound.ts when an order exists.
+8. Driver emits order-sent/result events.
+9. Registry persists order state and results.
+
+MAGLUMI 800 structure
+---------------------
+sdk_v3/machines/maglumi800/
+  maglumi800.ts  Driver lifecycle and workflow
+  astm.ts        MAGLUMI ASTM option selection
+  inbound.ts     MAGLUMI query/result parsing
+  outbound.ts    MAGLUMI worklist/no-order ASTM response builders
+  catalog.ts     MAGLUMI assay catalog and device-code mapping
+
+MAGLUMI 800 flow
+----------------
+1. Registry creates Maglumi800 from the registered driver.
+2. Maglumi800.configure validates profile config.
+3. Maglumi800.connect creates MachineCom using tcp-server config.
+4. Maglumi800 creates AstmProtocol with MAGLUMI_800_ASTM_OPTIONS.
+5. AstmProtocol receives simplified ASTM records and passes them to the driver.
+6. inbound.ts detects Q records, query-all requests, and result records.
+7. Driver replies to Q records using outbound.ts.
+8. Query-all replies send staged non-testing orders up to the legacy cap of 20.
+9. Driver emits order-sent/result events.
+10. Registry persists order state and results.
+
+Roche cobas c111 structure
+--------------------------
+sdk_v3/machines/rocheCobasC111/
+  rocheCobasC111.ts  Driver lifecycle, serial config, query/push/poll workflow
+  inbound.ts         Roche query/result parsing
+  outbound.ts        TSDWN/RSREQ/INR record builders
+  catalog.ts         Roche host/app code catalog and aliases
+
+Roche cobas c111 flow
+---------------------
+1. Registry creates RocheCobasC111 from the registered driver.
+2. RocheCobasC111.configure validates profile config.
+3. RocheCobasC111.connect creates MachineCom using serial config.
+4. RocheCobasC111 creates CobasC111SerialAstmProtocol.
+5. CobasC111SerialAstmProtocol handles Roche E1381 serial framing:
+   frame number required, checksum required, ETB reassembly, 240-character
+   outbound chunks, XON/XOFF tolerated, ENQ/ACK receive handshake.
+6. inbound.ts detects TSREQ query records and result uploads.
+7. Driver can reply to analyzer queries, push batch orders, and poll testing
+   samples for results according to profile config.
+8. Driver emits order-sent/result events.
+9. Registry persists order state and results.
+
+SNIBE MAGLUMI 800 protocol migration notes
+------------------------------------------
+- Reference source: src/drivers/snibe-maglumi-800/.
+- Protocol type: ASTM E1394-97 style over TCP/IP.
+- Transport: TCP server, analyzer connects to the SDK.
+- Tested framing from src:
+  - ENQ
+  - ACK
+  - STX
+  - records separated by CR
+  - ETX
+  - EOT
+  - no frame number
+  - no checksum
+- sdk_v3 machine option file:
+  - sdk_v3/machines/maglumi800/astm.ts
+- Expected Maglumi ASTM options from tested src:
+  - receiveFrameNumber: optional
+  - receiveChecksum: none
+  - sendFrameNumber: false
+  - sendChecksum: false
+  - finalTerminator: etx
+  - sendRecordsInSingleFrame: true
+- No Maglumi fixed estimate is configured in the driver.
+- Registry learned test statistics provide estimatedDurationMinutes when
+  history exists.
+- Machine files live under sdk_v3/machines/maglumi800/.
+- Machine workflow, inbound parsing, outbound builders, and catalog should be
+  migrated from tested src behavior without changing machine semantics.
+
+Roche cobas c111 protocol migration notes
+-----------------------------------------
+- Reference source: src/drivers/roche-cobas-c111/.
+- Protocol type: Roche-specific ASTM E1381/E1394 over RS-232.
+- Transport: serial, SDK uses MachineCom serial helper.
+- Tested framing from src:
+  - ENQ starts send/receive session
+  - inbound ENQ is ACKed
+  - STX + frame number is required
+  - checksum is required
+  - frame ends at CR/LF
+  - ETB chunks are reassembled until ETX
+  - outbound frame text chunks are limited to 240 characters
+  - outbound send waits a 120ms gap instead of waiting for ACK
+  - XON/XOFF and peer ACK/NAK bytes are tolerated in the read stream
+- Tested config defaults kept in sdk_v3:
+  - serialPort defaults to COM3 and maps internally to MachineCom portName
+  - parity defaults to n, matching the parsed tested src config
+  - flowControl defaults to xonxoff, matching the parsed tested src config
+  - replyToQueries defaults to false
+  - estimatedMinutes defaults to 12 and is used when Roche marks an order as
+    testing, matching the tested src driver behavior
+- sdk_v3 protocol variant:
+  - sdk_v3/protocols/astm/variants/cobasC111Serial.ts
+- sdk_v3 machine files:
+  - sdk_v3/machines/rocheCobasC111/
+
+  
+
+HTTP route documentation
+------------------------
+- Route purpose, payloads, query params, and curl examples live in:
+  sdk_v3/docs/routes.txt
+
+
+
+
