@@ -49,7 +49,7 @@ export const sysmexKx21nMachineId = 'sysmex-kx21n';
 
 export class SysmexKx21n extends BaseMachine {
     static readonly id = sysmexKx21nMachineId;
-    static readonly brand = 'Sysmex';
+    static readonly brand = 'SYSMEX';
     static readonly protocol = { name: 'Sysmex KX fixed-width host output', version: 'Class A/Class B' } as const;
     static readonly transportType: DriverTransportType = 'serial';
     static readonly models = SYSMEX_KX21N_MODELS;
@@ -114,6 +114,106 @@ export class SysmexKx21n extends BaseMachine {
                 { value: '8', label: '8' },
                 { value: '9', label: '9' },
             ],
+        },
+        {
+            key: 'stopBits',
+            label: 'Stop bits',
+            type: 'select',
+            required: true,
+            default: '1',
+            options: [{ value: '1', label: '1' }, {
+                value: '1.5',
+                label: '1.5',
+            }, { value: '2', label: '2' }],
+        },
+        {
+            key: 'parity',
+            label: 'Parity',
+            type: 'select',
+            required: true,
+            default: 'n',
+            options: [{ value: 'n', label: 'None (n)' }, {
+                value: 'o',
+                label: 'Odd (o)',
+            }, { value: 'e', label: 'Even (e)' }],
+        },
+        {
+            key: 'flowControl',
+            label: 'Flow control',
+            type: 'select',
+            required: true,
+            default: 'none',
+            options: [{ value: 'none', label: 'None' }, {
+                value: 'xonxoff',
+                label: 'XON/XOFF',
+            }, { value: 'rtscts', label: 'RTS/CTS' }],
+        },
+        {
+            key: 'reconnectDelayMs',
+            label: 'Reconnect delay (ms)',
+            type: 'number',
+            required: true,
+            default: 5000,
+            hint:
+                'Retained for serial transport compatibility; automatic reconnect is not yet supervised by the SDK.',
+        },
+        {
+            key: 'protocol',
+            label: 'Host protocol class',
+            type: 'select',
+            required: true,
+            default: 'class-b',
+            options: [{ value: 'class-b', label: 'Class B (ACK)' }, {
+                value: 'class-a',
+                label: 'Class A (one-way)',
+            }],
+            hint: 'Class B acknowledges ENQ and every received frame.',
+        },
+        {
+            key: 'outputFormat',
+            label: 'Output format',
+            type: 'select',
+            required: true,
+            default: 'auto',
+            options: [{ value: 'auto', label: 'Auto detect' }, {
+                value: 'kx-21n',
+                label: 'KX-21N fixed width',
+            }, { value: 'k-1000', label: 'K-1000 fixed width' }],
+        },
+        {
+            key: 'dateOrder',
+            label: 'Date order',
+            type: 'select',
+            required: true,
+            default: 'ymd',
+            options: [{ value: 'ymd', label: 'Year / month / day' }, {
+                value: 'mdy',
+                label: 'Month / day / year',
+            }, { value: 'dmy', label: 'Day / month / year' }],
+        },
+        {
+            key: 'stripSampleLeadingZeroes',
+            label: 'Strip sample leading zeroes',
+            type: 'boolean',
+            required: true,
+            default: true,
+        },
+        {
+            key: 'estimatedMinutes',
+            label: 'Estimated minutes',
+            type: 'number',
+            required: true,
+            default: 3,
+            hint:
+                'Initial display estimate retained from the legacy Sysmex configuration.',
+        },
+        {
+            key: 'trace',
+            label: 'Trace logging',
+            type: 'boolean',
+            required: true,
+            default: false,
+            hint: 'Enable verbose serial protocol logging.',
         },
     ] as const satisfies DriverConfigField[];
 
