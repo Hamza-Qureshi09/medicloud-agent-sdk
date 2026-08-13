@@ -43,6 +43,7 @@ Core layers
 
 - MachineRegistry owns application state and driver orchestration.
   - Registers driver classes
+  - Exposes each driver's static protocol name/version through listDrivers()
   - Starts/stops configured machine profiles
   - Stores orders/results/statistics
   - Synchronizes pending/testing orders into running drivers
@@ -154,6 +155,91 @@ Roche cobas c111 flow
    samples for results according to profile config.
 8. Driver emits order-sent/result events.
 9. Registry persists order state and results.
+
+Sysmex KX-21/KX-21N structure
+-----------------------------
+sdk_v3/machines/sysmexKx21n/
+  sysmexKx21n.ts  Driver lifecycle, serial config, local order correlation
+  astm.ts         Typed Sysmex ASTM variant options/re-export only
+  inbound.ts      Fixed-width, ASTM-style, and plain result parsing
+  catalog.ts      CBC analyte codes, names, units, and reference ranges
+  driver_test.ts  Fixed layouts, ASTM-style input, and Class B ACK regression
+
+sdk_v3/protocols/astm/variants/
+  sysmexKx21n.ts  KX Class A/Class B STX/ETX/ETB byte/session implementation
+
+Sysmex KX-21/KX-21N protocol details
+------------------------------------
+- Reference source: src/drivers/sysmex-kx21n/ (left unchanged).
+- Transport: RS-232 serial through MachineCom.
+- Default serial settings from the root .env reference:
+  - COM3, 9600 baud, 8 data bits, 1 stop bit
+  - no parity (normalized to "n")
+  - no flow control
+- Native protocol: Sysmex KX fixed-width host output, not a different ASTM
+  standard version. It reuses ASTM control characters (ENQ, ACK, STX, ETX,
+  ETB, EOT), which is why it can look like ASTM at the byte level.
+- Class A is one-way. Class B ACKs ENQ and each complete frame.
+- Optional two-character checksum text and CR/LF after a frame are consumed to
+  match the proven source behavior. The source does not reject a frame based on
+  checksum text, so the SDK migration preserves that semantic.
+- Native K-1000 analysis payloads are 119 characters and expose 18 CBC fields.
+- Native KX-21N analysis payloads are 129 characters and expose 19 CBC fields.
+- outputFormat=auto chooses the fixed layout by length and also recognizes
+  ASTM-style H/P/O/R/L records seen in the tested friend-style session.
+- Patient sample codes S and U are accepted. QC sample code C is identified and
+  ignored. Other text/sample codes are ignored.
+- Leading zero removal and date order remain profile-configurable.
+- The published KX host output has no order-download message. sendOrder() only
+  stages an SDK order so the registry can match the incoming sample result.
+  No outbound.ts exists because inventing an unsupported worklist protocol
+  would change analyzer semantics.
+
+Sysmex KX-21/KX-21N flow
+------------------------
+1. Registry creates SysmexKx21n from the registered driver.
+2. configure() validates the dynamic frontend/profile configuration.
+3. connect() opens MachineCom in serial mode and creates
+   SysmexKx21nAstmProtocol from protocols/astm/variants/.
+4. The protocol variant processes Class A/B session controls and complete
+   frames.
+5. The driver reassembles ETB ASTM-style chunks when present.
+6. inbound.ts auto-detects KX-21N, K-1000, ASTM-style, or plain result input.
+7. QC/unknown messages are ignored; analysis data maps to MachineResultEvent.
+8. Duplicate frames are suppressed until successful registry persistence.
+9. Registry matches the result to the locally staged profile/sample order,
+   stores the result, and completes the order.
+
+Sysmex integration boundaries
+-----------------------------
+- No database schema or table change is required. Sysmex uses the existing
+  machine_profiles, machine_orders, machine_results, and statistics contracts.
+- No MachineManager, registry implementation, validation schema, or route
+  dispatcher change is required.
+- machines/mod.ts registration is required so profiles can create the driver.
+- http/utils.ts catalog registration is required so the existing /catalogs
+  route and metadata-driven frontend expose the Sysmex CBC tests.
+- No Sysmex-specific frontend branch is required. The existing driver config
+  form, profile views, and catalog page consume registry metadata. The generic
+  driver-list card renders protocol metadata supplied by /drivers.
+
+Registered driver protocol metadata
+-----------------------------------
+- RegisteredMachine requires one static protocol object:
+  - name: protocol family or analyzer host protocol
+  - version: standard version or device protocol class/version
+- MachineRegistry.listDrivers() copies this object into MachineDriverView.
+- GET /drivers returns it for every driver.
+- GET /health returns the same objects under registered_drivers.
+- MachineManager and route handlers need no special protocol logic because
+  both endpoints already serialize listDrivers().
+- Protocol metadata is class-level capability information and is not persisted
+  in machine_profiles or any other database table.
+- Current values:
+  - YHLO iFlash 3000: ASTM / E1394-97
+  - SNIBE MAGLUMI 800: ASTM / E1394-97
+  - Roche cobas c111: ASTM / E1381/E1394-97 (Roche serial variant)
+  - Sysmex KX-21/KX-21N: Sysmex KX fixed-width host output / Class A/Class B
 
 SNIBE MAGLUMI 800 protocol migration notes
 ------------------------------------------

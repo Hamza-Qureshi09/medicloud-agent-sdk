@@ -53,6 +53,9 @@ HTTP
   errors and 404 missing-resource errors. Unexpected errors remain HTTP 500.
   Driver, running-machine, and catalog data are loaded only in the matching
   endpoint, no database or registry query runs eagerly for unrelated requests.
+  Registered driver views include static protocol name/version metadata.
+  /drivers returns it directly, and /health returns it inside
+  registered_drivers. It is not profile state and is never stored in SQLite.
 
 Order and analyzer query
   A machine profile can have only one pending/testing order for a sample ID.
@@ -74,6 +77,10 @@ Order and analyzer query
   estimate, and refreshes an expired deadline by 24 hours. Testing/completed
   orders cannot be resent because the analyzer may already be processing them
   or immutable result history may already exist.
+  Sysmex KX-21/KX-21N is also staged through sendOrder(), but for a different
+  reason: the published KX host interface uploads results and has no worklist
+  download. The staged order is only the registry correlation target. It stays
+  pending until a matching result arrives and no order bytes are sent.
 
 Result and learned-duration update
   One machine_results row belongs to one order and contains one results JSON
@@ -96,11 +103,18 @@ Machine and protocol layers
   BaseProtocol owns the read loop, serialized writes, and message callback.
   AstmProtocol parses ASTM frames, sends ASTM responses, and forwards complete
   messages through BaseProtocolOptions.onMessage.
+  SysmexKx21nAstmProtocol lives in protocols/astm/variants because its KX
+  Class A/Class B byte/session behavior differs from generic ASTM. The
+  machine-level astm.ts contains only typed option selection and re-exports.
+  The variant forwards fixed-width or optional ASTM-style payloads to the
+  Sysmex machine parser.
   BaseMachine requires configure(unknown) plus the connect/start/shutdown
   lifecycle and owns typed on()/off() event handlers.
   Registry registers handlers with on() and removes those exact callbacks with
   off() whenever a profile stops, preventing stale or duplicated handlers.
   iFlash owns ASTM-specific order/result behavior and never accesses SQLite.
+  Sysmex owns fixed-width/ASTM-style result interpretation and never accesses
+  SQLite.
 
 SQLite stores
   SqliteMachineDatabase owns the connection, fresh schema creation, stores,
@@ -114,3 +128,115 @@ SQLite stores
     MachineOrderStore         -> machine_orders
     MachineResultStore        -> machine_results
     MachineTestStatisticStore -> machine_test_statistics
+
+
+
+There is an important distinction between an analyzer querying the LIS and the LIS polling the analyzer.
+
+| Machine | Connection | Order flow | Result flow | Polling? |
+|---|---|---|---|---|
+| iFlash 3000 | TCP server | Analyzer sends ASTM `Q`; SDK replies with order/no-order | Analyzer uploads results | No scheduled polling |
+| MAGLUMI 800 | TCP server | Analyzer queries one sample or all staged orders; SDK returns worklist | Analyzer uploads results | No scheduled polling |
+| cobas c111 | RS-232 serial | Configurable: respond to queries and/or proactively push orders | Analyzer sends results, or SDK can poll for results | Optional result polling |
+| Sysmex KX-21N | RS-232 serial | No published worklist download; SDK only stages orders locally for matching | Analyzer uploads CBC results | No polling |
+
+
+iFlash 3000
+The SDK is a TCP server:
+SDK starts listener
+      ↓
+iFlash connects
+      ↓
+iFlash sends ASTM Q for sample
+      ↓
+SDK finds staged order
+      ↓
+SDK returns patient/order/tests
+      ↓
+iFlash performs tests
+      ↓
+iFlash uploads results
+
+sendOrder() does not immediately transmit anything. It stores the order in the driver until the analyzer sends a Q record.
+So iFlash is query/response, but it is not scheduled polling by the SDK.
+
+
+MAGLUMI 800
+MAGLUMI is also a TCP server flow:
+SDK starts listener
+      ↓
+MAGLUMI connects
+      ↓
+MAGLUMI queries one sample or requests all orders
+      ↓
+SDK returns matching staged worklist
+      ↓
+MAGLUMI performs tests and uploads results
+
+MAGLUMI differs from iFlash mainly because it supports query-all behavior. The SDK can return multiple staged orders, currently capped at 20.
+Again, the analyzer is querying the SDK. The SDK is not periodically polling MAGLUMI.
+
+
+cobas c111
+Cobas is not TCP client or TCP server. It uses a direct RS-232 serial connection.
+It supports several configurable workflows:
+Query response
+Cobas sends TSREQ query
+      ↓
+SDK finds staged order
+      ↓
+SDK returns the order
+
+Controlled by:
+replyToQueries
+Proactive order push
+Order staged in SDK
+      ↓
+SDK periodically checks staged orders
+      ↓
+SDK pushes a batch order to Cobas
+Controlled by:
+pushOrders
+pushIntervalMs
+Result polling
+Order is already testing
+      ↓
+SDK periodically sends result request
+      ↓
+Cobas returns available results
+Controlled by:
+resultPollingEnabled
+resultPollInitialDelayMs
+resultPollIntervalMs
+Therefore, Cobas is the only current driver with actual scheduled result polling. It can operate through query replies, order pushing, result polling, or a configured combination.
+
+
+Sysmex KX-21N
+Sysmex also uses RS-232 serial, but its workflow is very different from Cobas.
+The published KX host-output protocol is result-upload oriented:
+Order is created in MediCloud
+      ↓
+SDK stages it locally for sample matching
+      ↓
+No worklist is transmitted to Sysmex
+      ↓
+Sample is entered/run on Sysmex
+      ↓
+Sysmex uploads fixed-width CBC result
+      ↓
+SDK matches sample ID and completes staged order
+Sysmex supports:
+Class A: one-way transmission
+Class B: SDK acknowledges ENQ and every received frame
+KX-21N fixed-width results
+K-1000 fixed-width results
+ASTM-style result records used by some installations
+Class B acknowledgements are not polling. They are only link-level confirmation that bytes/frames were received.
+
+
+Connection summary
+iFlash   ──TCP──> SDK listener     TCP server
+MAGLUMI  ──TCP──> SDK listener     TCP server
+
+SDK ──RS-232── i── cobas c111      Direct serial
+SDK ──RS-232── i── Sysmex KX-21N   Direct serial

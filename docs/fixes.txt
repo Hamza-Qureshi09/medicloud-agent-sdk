@@ -210,6 +210,13 @@ Current audit result
   insert -> order completed -> learned test statistics update.
 - No serious remaining bug was found in the audited iFlash, Maglumi, Roche,
   registry, and machine-manager flow.
+- Sysmex KX-21/KX-21N is now registered as an isolated fourth driver. Its ASTM
+  protocol variant preserves the tested source Class A/B link behavior, while
+  its machine parser preserves K-1000, KX-21N, ASTM-style, QC, and plain-input
+  handling without changing src/.
+- The frontend needs no Sysmex-specific branch: /drivers supplies the serial
+  configFields and /catalogs supplies the CBC catalog through the existing
+  metadata-driven UI.
 - Known limitation: disconnected profiles require an explicit restart.
   TCP-server profiles do not automatically relisten, and the current serial
   transport performs one open attempt even though the Cobas profile retains a
