@@ -39,6 +39,12 @@ export type SerialTransportSpec = Extract<TransportSpec, { kind: 'serial' }>;
 export type SerialPortTransportOptions = Omit<SerialTransportSpec, 'kind'>;
 export type DriverTransportType = 'tcp' | 'serial' | 'custom';
 
+/** Static protocol identity exposed by a registered machine driver. */
+export interface DriverProtocolInfo {
+	readonly name: string;
+	readonly version: string;
+}
+
 // driver config field descriptor
 export type DriverConfigFieldType =
 	| 'string'
@@ -398,6 +404,8 @@ export interface RegisteredMachine<
 	readonly models?: readonly string[];
 	readonly configSchema: MachineConfigSchema<TConfig>;
 
+	/** Static protocol family and version shown by registry/API/UI metadata. */
+	readonly protocol: DriverProtocolInfo;
 	/** UI field definer - drivers set this so the frontend renders the correct form. */
 	readonly configFields?: readonly DriverConfigField[];
 	/** High-level transport category so the UI knows if it is TCP, Serial, etc. */

@@ -18,6 +18,7 @@ import type {
 	RunningMachine,
 	StoredMachineResult,
 	DriverConfigField,
+	DriverProtocolInfo,
 	DriverTransportType
 } from './types.ts';
 import {
@@ -35,6 +36,7 @@ export interface MachineDriverView {
 	readonly id: MachineDriverId;
 	readonly brand?: string;
 	readonly models: readonly string[];
+	readonly protocol: DriverProtocolInfo;
 
 	// field descriptor, this tells the UI what input to render for this driver config.
 	readonly configFields: readonly DriverConfigField[]
@@ -142,6 +144,7 @@ export class MachineRegistry {
 			id: driver.id,
 			brand: driver.brand,
 			models: driver.models ?? [],
+			protocol: driver.protocol,
 			configFields: driver.configFields ?? [],
 			transportType: driver.transportType ?? 'custom',
 		}));

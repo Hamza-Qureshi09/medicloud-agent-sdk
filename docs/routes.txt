@@ -61,7 +61,12 @@ Payload:
 Response shape:
 - {
     "status": "ok",
-    "registered_drivers": [],
+    "registered_drivers": [
+      {
+        "id": "iflash3000",
+        "protocol": { "name": "ASTM", "version": "E1394-97" }
+      }
+    ],
     "running_machines": []
   }
 
@@ -87,13 +92,29 @@ Current driver IDs:
 - iflash3000
 - snibe-maglumi-800
 - roche-cobas-c111
+- sysmex-kx21n
 
 Response shape:
 - {
     "drivers": [
-      { "id": "iflash3000", "brand": "YHLO", "models": ["..."] }
+      {
+        "id": "iflash3000",
+        "brand": "YHLO",
+        "models": ["..."],
+        "protocol": { "name": "ASTM", "version": "E1394-97" },
+        "transportType": "tcp",
+        "configFields": []
+      }
     ]
   }
+
+Static protocol metadata:
+- iflash3000: ASTM, E1394-97
+- snibe-maglumi-800: ASTM, E1394-97
+- roche-cobas-c111: ASTM, E1381/E1394-97 (Roche serial variant)
+- sysmex-kx21n: Sysmex KX fixed-width host output, Class A/Class B
+- Protocol metadata belongs to the registered driver class. It is not stored
+  in machine_profiles because it does not vary per profile.
 
 
 GET /catalogs
@@ -110,6 +131,7 @@ Examples:
 - curl "http://localhost:5000/catalogs?driver=iflash3000"
 - curl "http://localhost:5000/catalogs?driver=snibe-maglumi-800"
 - curl "http://localhost:5000/catalogs?driver=roche-cobas-c111"
+- curl "http://localhost:5000/catalogs?driver=sysmex-kx21n"
 
 List response shape:
 - {
@@ -215,6 +237,39 @@ Roche config notes:
 - replyToQueries defaults to false exactly like the tested src config.
 - estimatedMinutes defaults to 12 and is used when Roche marks an order as
   testing, matching the tested src driver behavior.
+
+Sysmex KX-21/KX-21N payload:
+- {
+    "driverId": "sysmex-kx21n",
+    "name": "Sysmex KX-21N",
+    "enabled": true,
+    "config": {
+      "serialPort": "COM3",
+      "baud": 9600,
+      "dataBits": 8,
+      "stopBits": 1,
+      "parity": "n",
+      "flowControl": "none",
+      "reconnectDelayMs": 5000,
+      "protocol": "class-b",
+      "outputFormat": "auto",
+      "dateOrder": "ymd",
+      "stripSampleLeadingZeroes": true,
+      "estimatedMinutes": 3,
+      "trace": false
+    }
+  }
+
+Sysmex config and workflow notes:
+- Values above map the tested root .env settings into normalized SDK values;
+  root parity "none" becomes SDK parity "n".
+- protocol is class-a (one-way) or class-b (ACK ENQ and every frame).
+- outputFormat is auto, kx-21n, or k-1000. Auto also accepts ASTM-style
+  record uploads used by some installations.
+- The published KX host-output workflow is result-upload only. POST /orders
+  stages a local order for result correlation; it does not transmit a worklist
+  to the analyzer.
+- Use Sysmex catalog codes such as WBC, RBC, HGB, HCT, and PLT in tests.
 
 Example:
 - curl -X POST http://localhost:5000/profiles -H "Content-Type: application/json" -d "{\"driverId\":\"snibe-maglumi-800\",\"name\":\"MAGLUMI 800\",\"enabled\":true,\"config\":{\"host\":\"0.0.0.0\",\"port\":7002}}"

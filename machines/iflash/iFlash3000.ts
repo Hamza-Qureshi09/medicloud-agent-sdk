@@ -36,6 +36,7 @@ const DEFAULT_QUERY_REPLY_DELAY_MS = 0;
 export class IFlash3000 extends BaseMachine {
 	static readonly id = iFlash3000MachineId;
 	static readonly brand = 'YHLO';
+	static readonly protocol = { name: 'ASTM', version: 'E1394-97' } as const;
 	static readonly transportType: DriverTransportType = 'tcp';
 	static readonly models = YHLO_IFLASH_3000_MODELS
 

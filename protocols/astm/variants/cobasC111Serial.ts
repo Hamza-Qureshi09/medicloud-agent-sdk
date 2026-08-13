@@ -30,7 +30,7 @@ export class CobasC111SerialAstmProtocol
 	readonly protocolName = 'ASTM';
 	override readonly protocolVersion = 'cobas-c111-e1381';
 
-	private readonly decoder = new TextDecoder('ascii', { fatal: false });
+	private readonly decoder = new TextDecoder('ascii', { fatal: false }); // does not throw instead replace the invalid data with �
 	private readonly encoder = new TextEncoder();
 	private readonly maxFrameTextLength: number;
 	private readonly sendGapMs: number;

@@ -59,6 +59,10 @@ export const rocheCobasC111MachineId = 'roche-cobas-c111';
 export class RocheCobasC111 extends BaseMachine {
 	static readonly id = rocheCobasC111MachineId;
 	static readonly brand = 'ROCHE';
+	static readonly protocol = {
+		name: 'ASTM',
+		version: 'E1381/E1394-97 (Roche serial variant)',
+	} as const;
 	static readonly transportType: DriverTransportType = 'serial';
 	static readonly models = COBAS_C111_MODELS;
 

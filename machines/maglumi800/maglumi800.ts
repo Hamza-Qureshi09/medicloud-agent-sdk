@@ -37,6 +37,7 @@ const DEFAULT_QUERY_ALL_LIMIT = 20;
 export class Maglumi800 extends BaseMachine {
 	static readonly id = maglumi800MachineId;
 	static readonly brand = 'SNIBE';
+	static readonly protocol = { name: 'ASTM', version: 'E1394-97' } as const;
 	static readonly transportType: DriverTransportType = 'tcp';
 	static readonly models = MAGLUMI_800_MODELS;
 
