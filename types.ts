@@ -404,6 +404,12 @@ export interface RegisteredMachine<
 	readonly models?: readonly string[];
 	readonly configSchema: MachineConfigSchema<TConfig>;
 
+	/**
+	 * Canonical tests assigned when this driver accepts an order without an
+	 * explicit test selection. Drivers without this metadata still require at
+	 * least one test.
+	 */
+	readonly defaultOrderTests?: readonly string[];
 	/** Static protocol family and version shown by registry/API/UI metadata. */
 	readonly protocol: DriverProtocolInfo;
 	/** UI field definer - drivers set this so the frontend renders the correct form. */

@@ -96,8 +96,7 @@ export class SysmexKx21nAstmProtocol extends BaseProtocol<SysmexKx21nFrame> {
                 rawFrame.subarray(1, terminatorIndex),
             );
             this.trace(
-                `RX frame bytes=${rawFrame.length} ascii="${visible(rawFrame)
-                }"`,
+                `RX frame bytes=${rawFrame.length} ascii="${visible(rawFrame)}"`,
             );
 
             if (this.classB) {
