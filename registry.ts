@@ -37,6 +37,7 @@ export interface MachineDriverView {
 	readonly brand?: string;
 	readonly models: readonly string[];
 	readonly protocol: DriverProtocolInfo;
+	readonly defaultOrderTests: readonly string[];
 
 	// field descriptor, this tells the UI what input to render for this driver config.
 	readonly configFields: readonly DriverConfigField[]
@@ -145,6 +146,7 @@ export class MachineRegistry {
 			brand: driver.brand,
 			models: driver.models ?? [],
 			protocol: driver.protocol,
+			defaultOrderTests: driver.defaultOrderTests ?? [],
 			configFields: driver.configFields ?? [],
 			transportType: driver.transportType ?? 'custom',
 		}));
@@ -442,9 +444,18 @@ export class MachineRegistry {
 	 */
 	async submitOrder(order: MachineOrder): Promise<number> {
 		const running = this.requireOrderMachine(order.machineId);
+		const tests = order.tests?.length > 0
+			? order.tests
+			: this.getRegistration(running.profile.driverId).defaultOrderTests;
+		if (!tests?.length) {
+			throw new Error(
+				`Machine driver "${running.profile.driverId}" requires at least one test code.`,
+			);
+		}
 
 		const pendingOrder = this.withLearnedEstimate({
 			...order,
+			tests: [...tests],
 			status: 'pending',
 		});
 
