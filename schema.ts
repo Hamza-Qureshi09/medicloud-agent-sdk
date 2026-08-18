@@ -72,7 +72,7 @@ export const OptionalOrderTextFields = {
 export const CreateOrderSchema = z.object({
 	machineId: PositiveIntegerSchema,
 	sampleId: NonEmptyStringSchema,
-	tests: NonEmptyStringArraySchema,
+	tests: NonEmptyStringArraySchema.optional(),
 	...OptionalOrderTextFields,
 	raw: z.unknown().optional(),
 	createdAt: DateStringSchema.optional(),

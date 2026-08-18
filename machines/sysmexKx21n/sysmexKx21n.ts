@@ -1,4 +1,3 @@
-
 import * as z from '@zod/zod';
 import { BaseMachine } from '../../abstracts/baseMachine.ts';
 import { ASTM_CONTROL } from '../../protocols/astm/constants.ts';
@@ -20,7 +19,7 @@ import {
     SysmexKx21nAstmProtocol,
     type SysmexKx21nFrame,
 } from './astm.ts';
-import { SYSMEX_KX21N_CATALOG, SYSMEX_KX21N_MODELS } from './catalog.ts';
+import { SYSMEX_KX21N_MODELS, SYSMEX_KX21N_ORDER_CATALOG } from './catalog.ts';
 import {
     looksLikeAstmPayload,
     parseSysmexKx21nPayload,
@@ -50,9 +49,10 @@ export const sysmexKx21nMachineId = 'sysmex-kx21n';
 export class SysmexKx21n extends BaseMachine {
     static readonly id = sysmexKx21nMachineId;
     static readonly brand = 'SYSMEX';
-    static readonly protocol = { name: 'Sysmex KX fixed-width host output', version: 'Class A/Class B' } as const;
+   static readonly protocol = { name: 'Sysmex KX fixed-width host output', version: 'Class A/Class B' } as const;
     static readonly transportType: DriverTransportType = 'serial';
     static readonly models = SYSMEX_KX21N_MODELS;
+    static readonly defaultOrderTests = ['CBC'] as const;
 
     // for backend profile config before save
     static readonly configSchema = z.object({
@@ -303,7 +303,11 @@ export class SysmexKx21n extends BaseMachine {
             throw new Error('Sysmex KX-21N order sampleId is required.');
         }
         for (const test of order.tests) {
-            if (!SYSMEX_KX21N_CATALOG.some((entry) => entry.code === test)) {
+            if (
+                !SYSMEX_KX21N_ORDER_CATALOG.some((entry) =>
+                    entry.code === test?.trim()?.toUpperCase()
+                )
+            ) {
                 throw new Error(
                     `Sysmex KX-21N does not support test code "${test}".`,
                 );
@@ -352,39 +356,39 @@ export class SysmexKx21n extends BaseMachine {
     }
 
     private transportSpec(config: SysmexKx21nConfig): TransportSpec {
-		return {
-			kind: 'serial',
-			portName: config.portName,
-			baud: config.baud,
-			dataBits: config.dataBits,
-			stopBits: config.stopBits,
-			parity: config.parity,
-			flowControl: config.flowControl,
-			reconnectDelayMs: config.reconnectDelayMs,
-		};
-	}
+        return {
+            kind: 'serial',
+            portName: config.portName,
+            baud: config.baud,
+            dataBits: config.dataBits,
+            stopBits: config.stopBits,
+            parity: config.parity,
+            flowControl: config.flowControl,
+            reconnectDelayMs: config.reconnectDelayMs,
+        };
+    }
 
-	private watchConnection(com: MachineCom): void {
-		void com.whenConnected().then(() => {
-			if (this.com === com && !this.connected) this.markConnected();
-		}).catch((error) => {
-			if (this.com === com) void this.handleError(error);
-		});
-	}
+    private watchConnection(com: MachineCom): void {
+        void com.whenConnected().then(() => {
+            if (this.com === com && !this.connected) this.markConnected();
+        }).catch((error) => {
+            if (this.com === com) void this.handleError(error);
+        });
+    }
 
-	private requireConfiguration(): SysmexKx21nConfig {
-		if (!this.configuration) {
-			throw new Error(
-				'Sysmex KX-21N is not configured. Call configure() before connect().',
-			);
-		}
-		return this.configuration;
-	}
+    private requireConfiguration(): SysmexKx21nConfig {
+        if (!this.configuration) {
+            throw new Error(
+                'Sysmex KX-21N is not configured. Call configure() before connect().',
+            );
+        }
+        return this.configuration;
+    }
 
-	private async handleError(error: unknown): Promise<void> {
-		await this.emit(
-			'error',
-			error instanceof Error ? error : new Error(String(error)),
-		);
-	}
+    private async handleError(error: unknown): Promise<void> {
+        await this.emit(
+            'error',
+            error instanceof Error ? error : new Error(String(error)),
+        );
+    }
 }

@@ -1,6 +1,5 @@
 /** Parse Sysmex KX-21/KX-21N fixed-width, ASTM-style, and plain uploads. */
 
-
 import type { MachineAnalyteResult, MachineResultEvent } from '../../types.ts';
 import {
     astmField,
@@ -9,8 +8,7 @@ import {
     unescapeAstmText,
 } from '../../protocols/astm/records.ts';
 import { ASTM_CONTROL } from '../../protocols/astm/constants.ts';
-import { findSysmexKx21nAnalyte } from './catalog.ts';
-
+import { findSysmexKx21nResultMetadata } from './resultMetadata.ts';
 
 const CONTROL_TEXT = Object.fromEntries(
     Object.entries(ASTM_CONTROL).map(([key, value]) => [
@@ -350,7 +348,7 @@ function analyte(options: {
     flag?: string;
     completedAt?: string;
 }): MachineAnalyteResult {
-    const catalog = findSysmexKx21nAnalyte(options.code);
+    const catalog = findSysmexKx21nResultMetadata(options.code);
     return {
         assayNo: options.code,
         assayName: catalog?.name ?? options.code,
@@ -358,8 +356,6 @@ function analyte(options: {
         value: options.value,
         qualitative: options.qualitative,
         unit: options.unit ?? catalog?.unit,
-        lowReference: catalog?.lowReference,
-        highReference: catalog?.highReference,
         abnormalFlag: normalizeFlag(options.flag),
         status: 'F',
         completedAt: options.completedAt,

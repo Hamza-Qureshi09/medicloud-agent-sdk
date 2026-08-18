@@ -5,7 +5,7 @@ import { MAGLUMI_800_ASSAYS } from '../machines/maglumi800/catalog.ts';
 import { maglumi800MachineId } from '../machines/maglumi800/maglumi800.ts';
 import { COBAS_C111_CATALOG } from '../machines/rocheCobasC111/catalog.ts';
 import { rocheCobasC111MachineId } from '../machines/rocheCobasC111/rocheCobasC111.ts';
-import { SYSMEX_KX21N_CATALOG } from '../machines/sysmexKx21n/catalog.ts';
+import { SYSMEX_KX21N_ORDER_CATALOG } from '../machines/sysmexKx21n/catalog.ts';
 import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/sysmexKx21n.ts';
 import type { CatalogTestEntry, CatalogView } from '../types.ts';
 
@@ -25,7 +25,7 @@ const cobasTests: readonly CatalogTestEntry[] = COBAS_C111_CATALOG.map((t) => ({
 	name: t.shortName,
 }));
 
-const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_CATALOG.map((t) => ({
+const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_ORDER_CATALOG.map((t) => ({
 	code: t.code,
 	name: t.name,
 }));

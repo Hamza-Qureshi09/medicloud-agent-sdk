@@ -25,7 +25,7 @@ export const handleOrderRoutes = async (
 	method: string,
 	segments: string[],
 ): Promise<Response> => {
-	// GET /orders with or without query
+	// GET /orders with or without queryf
 	if (segments.length === 0 && method === 'GET') {
 		const query = parseInput(
 			ListOrdersQuerySchema,
@@ -46,13 +46,14 @@ export const handleOrderRoutes = async (
 		const createdAt = input.createdAt ?? new Date();
 		const order: MachineOrder = {
 			...input,
+			tests: input.tests ?? [],
 			status: 'pending',
 			createdAt,
 			expiresAt: input.expiresAt ??
 				new Date(createdAt.getTime() + 24 * 60 * 60 * 1_000),
 		};
 		const orderId = await registry.submitOrder(order);
-		return json({ order: await registry.getOrder(orderId) }, 201);
+		return json({ order: orderId ? await registry.getOrder(orderId) : null }, 201);
 	}
 
 	if (segments.length === 0) {
