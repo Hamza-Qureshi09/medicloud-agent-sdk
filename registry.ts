@@ -30,6 +30,10 @@ import {
 
 export interface MachineRegistryOptions {
 	dbPath?: string;
+	/** Forwarded from MachineManagerOptions — see that interface for full docs. */
+	onResultPersisted?: (
+		result: StoredMachineResult & { machineId: MachineId },
+	) => void | Promise<void>;
 }
 
 export interface MachineDriverView {
@@ -90,6 +94,8 @@ export class MachineRegistry {
 	private readonly log: Logger = createLogger('Machine-Registry');
 	private dbPath: string;
 	private db?: SqliteMachineDatabase;
+	/** Post-persist hook forwarded from MachineManagerOptions. */
+	private onResultPersisted?: MachineRegistryOptions['onResultPersisted'];
 
 	constructor(options: MachineRegistryOptions = {}) {
 		this.dbPath = options.dbPath ?? './data/machines.db';
@@ -104,6 +110,10 @@ export class MachineRegistry {
 			);
 		}
 		this.dbPath = dbPath;
+		// Only update the hook if explicitly provided (allows partial re-configure).
+		if (options.onResultPersisted !== undefined) {
+			this.onResultPersisted = options.onResultPersisted;
+		}
 	}
 
 	// register new driver/machine locally in map
@@ -897,14 +907,31 @@ export class MachineRegistry {
 			machineId,
 		};
 
+		// Capture the auto-incremented SQLite row id from inside the transaction.
+		let insertedId!: number;
 		this.database.transaction(() => {
-			this.database.results.insert(storedResult);
+			insertedId = this.database.results.insert(storedResult);
 			this.database.orders.markCompleted(orderId, result.receivedAt);
 			this.database.testStatistics.recordCompletedOrder(
 				order,
 				result.receivedAt,
 			);
 		});
+
+		// Fire hook after the transaction commits — fire-and-forget so errors
+		// in the hook never surface back into the driver pipeline.
+		if (this.onResultPersisted) {
+			const hook = this.onResultPersisted;
+			const persisted: StoredMachineResult = {
+				...storedResult,
+				id: insertedId,
+			};
+			void Promise.resolve(
+				hook({ ...persisted, machineId }),
+			).catch((err) =>
+				this.log.error('onResultPersisted hook error:', err)
+			);
+		}
 
 		return Promise.resolve();
 	}
