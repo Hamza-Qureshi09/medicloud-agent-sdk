@@ -434,6 +434,17 @@ export interface MachineManagerHttpOptions {
 export interface MachineManagerOptions {
 	dbPath?: string;
 	http?: MachineManagerHttpOptions;
+	/**
+	 * Optional hook called after each machine result is successfully persisted
+	 * to SQLite. Runs fire-and-forget — errors are caught and logged so they
+	 * never propagate back into the machine driver pipeline.
+	 *
+	 * Use this in the agent layer to forward results to MediCloud or a master
+	 * without coupling sdk_v3 to any external transport.
+	 */
+	onResultPersisted?: (
+		result: StoredMachineResult & { machineId: MachineId },
+	) => void | Promise<void>;
 }
 
 /** Framework-neutral HTTP boundary exposed by MachineManager. */

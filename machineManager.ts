@@ -21,6 +21,8 @@ export class MachineManager implements IMachineManager {
 		this.registry = machineRegistry;
 		this.registry.configure({
 			dbPath: options.dbPath ?? './data/machines.db',
+			// Forward the hook so the registry can fire it after each persist.
+			onResultPersisted: options.onResultPersisted,
 		});
 		this.http = {
 			enabled: options.http?.enabled ?? true,
