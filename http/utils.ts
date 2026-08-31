@@ -1,12 +1,12 @@
 import * as z from '@zod/zod';
 import { IFLASH_3000_TESTS } from '../machines/iflash/catalog.ts';
-import { iFlash3000MachineId } from '../machines/iflash/iFlash3000.ts';
+import { iFlash3000MachineId } from '../machines/iflash/index.ts';
 import { MAGLUMI_800_ASSAYS } from '../machines/maglumi800/catalog.ts';
-import { maglumi800MachineId } from '../machines/maglumi800/maglumi800.ts';
+import { maglumi800MachineId } from '../machines/maglumi800/index.ts';
 import { COBAS_C111_CATALOG } from '../machines/rocheCobasC111/catalog.ts';
-import { rocheCobasC111MachineId } from '../machines/rocheCobasC111/rocheCobasC111.ts';
+import { rocheCobasC111MachineId } from '../machines/rocheCobasC111/index.ts';
 import { SYSMEX_KX21N_ORDER_CATALOG } from '../machines/sysmexKx21n/catalog.ts';
-import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/sysmexKx21n.ts';
+import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/index.ts';
 import type { CatalogTestEntry, CatalogView } from '../types.ts';
 
 // All Catalog normalization
