@@ -25,10 +25,10 @@
 // export * from './iflash/iFlash3000.ts';
 
 import { machineRegistry } from '../registry.ts';
-import { IFlash3000 } from './iflash/iFlash3000.ts';
-import { Maglumi800 } from './maglumi800/maglumi800.ts';
-import { RocheCobasC111 } from './rocheCobasC111/rocheCobasC111.ts';
-import { SysmexKx21n } from './sysmexKx21n/sysmexKx21n.ts';
+import { IFlash3000 } from './iflash/index.ts';
+import { Maglumi800 } from './maglumi800/index.ts';
+import { RocheCobasC111 } from './rocheCobasC111/index.ts';
+import { SysmexKx21n } from './sysmexKx21n/index.ts';
 
 /**
  * Here register every available driver/machine class here. Each class owns its metadata,
@@ -39,7 +39,7 @@ machineRegistry.register(Maglumi800);
 machineRegistry.register(RocheCobasC111);
 machineRegistry.register(SysmexKx21n);
 
-export * from './iflash/iFlash3000.ts';
-export * from './maglumi800/maglumi800.ts';
-export * from './rocheCobasC111/rocheCobasC111.ts';
-export * from './sysmexKx21n/sysmexKx21n.ts';
+export * from './iflash/index.ts';
+export * from './maglumi800/index.ts';
+export * from './rocheCobasC111/index.ts';
+export * from './sysmexKx21n/index.ts';
