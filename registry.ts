@@ -30,7 +30,7 @@ import {
 
 export interface MachineRegistryOptions {
 	dbPath?: string;
-	/** Forwarded from MachineManagerOptions — see that interface for full docs. */
+	/** Forwarded from MachineManagerOptions - see that interface for full docs. */
 	onResultPersisted?: (
 		result: StoredMachineResult & { machineId: MachineId },
 	) => void | Promise<void>;
@@ -918,7 +918,7 @@ export class MachineRegistry {
 			);
 		});
 
-		// Fire hook after the transaction commits — fire-and-forget so errors
+		// Fire hook after the transaction commits - fire-and-forget so errors
 		// in the hook never surface back into the driver pipeline.
 		if (this.onResultPersisted) {
 			const hook = this.onResultPersisted;
