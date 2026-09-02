@@ -467,10 +467,48 @@ export type ValidationResult<T> = { ok: true; value: T } | {
 	error: string;
 };
 
-// normalized test entry returned by catalog api.
-export interface CatalogTestEntry {
+/**
+ * Describes one result/analyte that a machine can return/report back for a test.
+ *
+ * Example:
+ * A CBC test can return WBC, RBC, HGB, PLT, etc.
+ *
+ * The `code` is used to match this analyte with the `assayNo`
+ * returned by the machine driver.
+ * 
+ * Basically, it tells "What individual results can this test produce?"
+ */
+export interface CatalogAnalyteEntry {
+	// Code used to identify this result, e.g. "WBC" or "HGB".
 	readonly code: string;
+
+	// Human-readable name of the result.
 	readonly name: string;
+
+	// Unit of the result, if applicable, e.g. "g/dL".
+	readonly unit?: string;
+}
+
+/**
+ * Describes one test available in a machine/driver catalog.
+ *
+ * It tells us the test's code and name, and which individual
+ * results (analytes) the machine can return for that test.
+ *
+ * Example:
+ * "GLU" may have one analyte, while "CBC" may have many.
+ * 
+ * Basically, it tells "What test is available?"
+ */
+export interface CatalogTestEntry {
+	// Code used to identify the test, e.g. "CBC".
+	readonly code: string;
+
+	// Human-readable name of the test.
+	readonly name: string;
+
+	// Results/analytes that can be returned for this test.
+	readonly analytes: readonly CatalogAnalyteEntry[];
 }
 
 // catalog view

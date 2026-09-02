@@ -6,28 +6,45 @@ import { maglumi800MachineId } from '../machines/maglumi800/index.ts';
 import { COBAS_C111_CATALOG } from '../machines/rocheCobasC111/catalog.ts';
 import { rocheCobasC111MachineId } from '../machines/rocheCobasC111/index.ts';
 import { SYSMEX_KX21N_ORDER_CATALOG } from '../machines/sysmexKx21n/catalog.ts';
+import { SYSMEX_KX21N_RESULT_METADATA } from '../machines/sysmexKx21n/resultMetadata.ts';
 import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/index.ts';
-import type { CatalogTestEntry, CatalogView } from '../types.ts';
+import type { CatalogAnalyteEntry, CatalogTestEntry, CatalogView } from '../types.ts';
 
-// All Catalog normalization
-const iflashTests: readonly CatalogTestEntry[] = IFLASH_3000_TESTS.map((t) => ({
-	code: t.testCode,
-	name: t.testName,
-}));
+// Creates a test that returns only one analyte/result.
+function singleAnalyteTest(code: string, name: string): CatalogTestEntry {
+	return { code, name, analytes: [{ code, name }] };
+}
 
-const maglumiTests: readonly CatalogTestEntry[] = MAGLUMI_800_ASSAYS.map((t) => ({
-	code: t.code,
-	name: t.name,
-}));
+// Convert iFlash tests to the common catalog format.
+const iflashTests: readonly CatalogTestEntry[] = IFLASH_3000_TESTS.map((t) =>
+	singleAnalyteTest(t.testCode, t.testName)
+);
 
-const cobasTests: readonly CatalogTestEntry[] = COBAS_C111_CATALOG.map((t) => ({
-	code: t.hostCode,
-	name: t.shortName,
-}));
+// Convert MAGLUMI tests to the common catalog format.
+const maglumiTests: readonly CatalogTestEntry[] = MAGLUMI_800_ASSAYS.map((t) =>
+	singleAnalyteTest(t.code, t.name)
+);
 
+// Convert cobas tests to the common catalog format.
+const cobasTests: readonly CatalogTestEntry[] = COBAS_C111_CATALOG.map((t) =>
+	singleAnalyteTest(t.hostCode, t.shortName)
+);
+
+// Convert Sysmex result metadata to the common analyte format.
+// The KX-21N runs a single orderable panel that answers with every hematology
+// parameter, so its one test carries the full result-metadata analyte list.
+const sysmexAnalytes: readonly CatalogAnalyteEntry[] =
+	SYSMEX_KX21N_RESULT_METADATA.map((analyte) => ({
+		code: analyte.code,
+		name: analyte.name,
+		unit: analyte.unit,
+	}));
+
+// Sysmex returns multiple analytes/results for a single ordered test.
 const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_ORDER_CATALOG.map((t) => ({
 	code: t.code,
 	name: t.name,
+	analytes: sysmexAnalytes
 }));
 
 // catalog manager
