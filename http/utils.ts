@@ -11,13 +11,14 @@ import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/index.ts';
 import type { CatalogAnalyteEntry, CatalogTestEntry, CatalogView } from '../types.ts';
 
 // Creates a test that returns only one analyte/result.
-function singleAnalyteTest(code: string, name: string): CatalogTestEntry {
-	return { code, name, analytes: [{ code, name }] };
+function singleAnalyteTest(code: string, name: string, resultCode = code): CatalogTestEntry {
+	return { code, name, analytes: [{ code: resultCode, name }] };
 }
 
 // Convert iFlash tests to the common catalog format.
 const iflashTests: readonly CatalogTestEntry[] = IFLASH_3000_TESTS.map((t) =>
-	singleAnalyteTest(t.testCode, t.testName)
+	// Orders use the test code, inbound ASTM results identify the channel.
+	singleAnalyteTest(t.testCode, t.testName, String(t.channelNumber)) 
 );
 
 // Convert MAGLUMI tests to the common catalog format.

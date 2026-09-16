@@ -479,7 +479,7 @@ export type ValidationResult<T> = { ok: true; value: T } | {
  * Basically, it tells "What individual results can this test produce?"
  */
 export interface CatalogAnalyteEntry {
-	// Code used to identify this result, e.g. "WBC" or "HGB".
+	// Exact assayNo emitted by the result parser (may differ from the order code).
 	readonly code: string;
 
 	// Human-readable name of the result.
