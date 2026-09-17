@@ -29,6 +29,7 @@ import { IFlash3000 } from './iflash/index.ts';
 import { Maglumi800 } from './maglumi800/index.ts';
 import { RocheCobasC111 } from './rocheCobasC111/index.ts';
 import { SysmexKx21n } from './sysmexKx21n/index.ts';
+import { BiolaboKenza } from './biolaboKenza/index.ts';
 
 /**
  * Here register every available driver/machine class here. Each class owns its metadata,
@@ -38,8 +39,10 @@ machineRegistry.register(IFlash3000);
 machineRegistry.register(Maglumi800);
 machineRegistry.register(RocheCobasC111);
 machineRegistry.register(SysmexKx21n);
+machineRegistry.register(BiolaboKenza);
 
 export * from './iflash/index.ts';
 export * from './maglumi800/index.ts';
 export * from './rocheCobasC111/index.ts';
 export * from './sysmexKx21n/index.ts';
+export * from './biolaboKenza/index.ts';
