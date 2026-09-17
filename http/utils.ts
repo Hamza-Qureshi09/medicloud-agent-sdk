@@ -8,6 +8,8 @@ import { rocheCobasC111MachineId } from '../machines/rocheCobasC111/index.ts';
 import { SYSMEX_KX21N_ORDER_CATALOG } from '../machines/sysmexKx21n/catalog.ts';
 import { SYSMEX_KX21N_RESULT_METADATA } from '../machines/sysmexKx21n/resultMetadata.ts';
 import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/index.ts';
+import { BIOLABO_KENZA_ORDER_CATALOG } from '../machines/biolaboKenza/catalog.ts';
+import { biolaboKenzaMachineId } from '../machines/biolaboKenza/index.ts';
 import type { CatalogAnalyteEntry, CatalogTestEntry, CatalogView } from '../types.ts';
 
 // Creates a test that returns only one analyte/result.
@@ -48,6 +50,12 @@ const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_ORDER_CATALOG.map(
 	analytes: sysmexAnalytes
 }));
 
+// Convert Kenza tests to the common catalog format.
+// Each Kenza assay produces one numeric result on the wire, so test and analyte share the same code.
+const kenzaTests: readonly CatalogTestEntry[] = BIOLABO_KENZA_ORDER_CATALOG.map(
+	(t) => singleAnalyteTest(t.code, t.name),
+);
+
 // catalog manager
 const CATALOGS: readonly CatalogView[] = [
 	{
@@ -73,6 +81,12 @@ const CATALOGS: readonly CatalogView[] = [
 		driverId: sysmexKx21nMachineId,
 		machine: 'Sysmex KX-21N',
 		tests: sysmexTests,
+	},
+	{
+		id: biolaboKenzaMachineId,
+		driverId: biolaboKenzaMachineId,
+		machine: 'BioLabo Kenza 240TX',
+		tests: kenzaTests,
 	},
 ];
 
