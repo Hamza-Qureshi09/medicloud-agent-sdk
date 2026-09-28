@@ -30,6 +30,8 @@ import { Maglumi800 } from './maglumi800/index.ts';
 import { RocheCobasC111 } from './rocheCobasC111/index.ts';
 import { SysmexKx21n } from './sysmexKx21n/index.ts';
 import { DrAccuAfi6100b } from './draccuAfi6100b/index.ts';
+import { BonaveraCount } from './bonaveraCount/index.ts';
+import { Bonavera200 } from './bonavera200/index.ts';
 import { BiolaboKenza } from './biolaboKenza/index.ts';
 
 /**
@@ -42,6 +44,8 @@ machineRegistry.register(RocheCobasC111);
 machineRegistry.register(SysmexKx21n);
 machineRegistry.register(BiolaboKenza);
 machineRegistry.register(DrAccuAfi6100b);
+machineRegistry.register(BonaveraCount);
+machineRegistry.register(Bonavera200);
 
 export * from './iflash/index.ts';
 export * from './maglumi800/index.ts';
@@ -49,3 +53,5 @@ export * from './rocheCobasC111/index.ts';
 export * from './sysmexKx21n/index.ts';
 export * from './biolaboKenza/index.ts';
 export * from './draccuAfi6100b/index.ts';
+export * from './bonaveraCount/index.ts';
+export * from './bonavera200/index.ts';
