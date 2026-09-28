@@ -1,3 +1,7 @@
+import { BONAVERA_COUNT_ORDER_CATALOG } from '../machines/bonaveraCount/catalog.ts';
+import { BONAVERA_COUNT_RESULT_METADATA } from '../machines/bonaveraCount/resultMetadata.ts';
+import { bonaveraCountMachineId } from '../machines/bonaveraCount/index.ts';
+import { bonavera200MachineId } from '../machines/bonavera200/index.ts';
 import { DRACCU_AFI_6100B_CATALOG } from '../machines/draccuAfi6100b/catalog.ts';
 import { drAccuAfi6100bMachineId } from '../machines/draccuAfi6100b/index.ts';
 import * as z from '@zod/zod';
@@ -22,7 +26,7 @@ function singleAnalyteTest(code: string, name: string, resultCode = code): Catal
 // Convert iFlash tests to the common catalog format.
 const iflashTests: readonly CatalogTestEntry[] = IFLASH_3000_TESTS.map((t) =>
 	// Orders use the test code, inbound ASTM results identify the channel.
-	singleAnalyteTest(t.testCode, t.testName, String(t.channelNumber)) 
+	singleAnalyteTest(t.testCode, t.testName, String(t.channelNumber))
 );
 
 // Convert MAGLUMI tests to the common catalog format.
@@ -67,6 +71,21 @@ const drAccuTests: readonly CatalogTestEntry[] = [
 	])).values(),
 ];
 
+// Bonavera Count runs one CBC panel with multiple reported analytes.
+const bonaveraCountAnalytes: readonly CatalogAnalyteEntry[] =
+	BONAVERA_COUNT_RESULT_METADATA.map((analyte) => ({
+		code: analyte.code,
+		name: analyte.name,
+		unit: analyte.unit,
+	}));
+
+const bonaveraCountTests: readonly CatalogTestEntry[] =
+	BONAVERA_COUNT_ORDER_CATALOG.map((test) => ({
+		code: test.code,
+		name: test.name,
+		analytes: bonaveraCountAnalytes,
+	}));
+
 // catalog manager
 const CATALOGS: readonly CatalogView[] = [
 	{
@@ -104,6 +123,19 @@ const CATALOGS: readonly CatalogView[] = [
 		driverId: drAccuAfi6100bMachineId,
 		machine: 'DrAccu AFI-6100B',
 		tests: drAccuTests,
+	},
+	// The tested source has no fixed assay catalog. Order codes pass through unchanged.
+	{
+		id: bonavera200MachineId,
+		driverId: bonavera200MachineId,
+		machine: 'Bonavera 200',
+		tests: [],
+	},
+	{
+		id: bonaveraCountMachineId,
+		driverId: bonaveraCountMachineId,
+		machine: 'Biogeny BONAVERA Count',
+		tests: bonaveraCountTests,
 	},
 ];
 
