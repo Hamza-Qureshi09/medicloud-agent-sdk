@@ -8,7 +8,9 @@ import type {
 	MachineConfig,
 	MachineConfigSchema,
 	MachineOrder,
+	MachineResultEvent,
 } from '../../types.ts';
+import { BONAVERA_200_PLACEHOLDER_TEST_CODE } from './catalog.ts';
 import { parseBonavera200Hl7 } from './inbound.ts';
 import { buildAck, buildDsrWithOrder, buildQck } from './outbound.ts';
 
@@ -19,6 +21,8 @@ export interface Bonavera200Config extends MachineConfig {
 }
 
 export const bonavera200MachineId = 'bonavera-200';
+
+const catalogCapturePath = './data/bonavera200-catalog-captures.jsonl';
 
 export class Bonavera200 extends BaseMachine {
 	static readonly id = bonavera200MachineId;
@@ -136,6 +140,11 @@ export class Bonavera200 extends BaseMachine {
 				`Bonavera 200 order "${order.sampleId}" has no tests.`,
 			);
 		}
+		if (order.tests.includes(BONAVERA_200_PLACEHOLDER_TEST_CODE)) {
+			throw new Error(
+				'Bonavera 200 fake catalog code cannot be sent to the analyzer.',
+			);
+		}
 		if (order.id !== undefined) {
 			for (const [sampleId, staged] of this.orders) {
 				if (staged.id === order.id && sampleId !== order.sampleId) {
@@ -165,6 +174,14 @@ export class Bonavera200 extends BaseMachine {
 		if (trigger === 'ACK') return;
 
 		if (parsed.kind === 'results' && parsed.result) {
+			try {
+				await this.captureCatalogCandidates(
+					parsed.messageId,
+					parsed.result,
+				);
+			} catch (error) {
+				void this.handleError(error).catch(() => undefined);
+			}
 			await this.emit('result', parsed.result);
 			const order = this.orders.get(parsed.result.sampleId);
 			if (order) {
@@ -220,6 +237,30 @@ export class Bonavera200 extends BaseMachine {
 		await protocol.send(buildAck(parsed.messageId, 'AA', triggerEvent));
 	}
 
+	/**
+	 * Record catalog candidates from every ORU before order correlation.
+	 * This file contains assay identifiers, names and units, not patient details.
+	 */
+	private async captureCatalogCandidates(
+		messageId: string,
+		result: MachineResultEvent,
+	): Promise<void> {
+		const record = {
+			receivedAt: result.receivedAt.toISOString(),
+			messageId,
+			analytes: result.payload.results.map((analyte) => ({
+				assayNo: analyte.assayNo,
+				assayName: analyte.assayName,
+				unit: analyte.unit,
+			})),
+		};
+		await Deno.mkdir('./data', { recursive: true });
+		await Deno.writeTextFile(
+			catalogCapturePath,
+			JSON.stringify(record) + '\n',
+			{ create: true, append: true },
+		);
+	}
 	private async markOrderSent(
 		order: MachineOrder,
 		raw: string,
