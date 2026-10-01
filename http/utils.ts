@@ -2,6 +2,7 @@ import { BONAVERA_COUNT_ORDER_CATALOG } from '../machines/bonaveraCount/catalog.
 import { BONAVERA_COUNT_RESULT_METADATA } from '../machines/bonaveraCount/resultMetadata.ts';
 import { bonaveraCountMachineId } from '../machines/bonaveraCount/index.ts';
 import { bonavera200MachineId } from '../machines/bonavera200/index.ts';
+import { BONAVERA_200_PLACEHOLDER_CATALOG } from '../machines/bonavera200/catalog.ts';
 import { DRACCU_AFI_6100B_CATALOG } from '../machines/draccuAfi6100b/catalog.ts';
 import { drAccuAfi6100bMachineId } from '../machines/draccuAfi6100b/index.ts';
 import * as z from '@zod/zod';
@@ -16,10 +17,18 @@ import { SYSMEX_KX21N_RESULT_METADATA } from '../machines/sysmexKx21n/resultMeta
 import { sysmexKx21nMachineId } from '../machines/sysmexKx21n/index.ts';
 import { BIOLABO_KENZA_ORDER_CATALOG } from '../machines/biolaboKenza/catalog.ts';
 import { biolaboKenzaMachineId } from '../machines/biolaboKenza/index.ts';
-import type { CatalogAnalyteEntry, CatalogTestEntry, CatalogView } from '../types.ts';
+import type {
+	CatalogAnalyteEntry,
+	CatalogTestEntry,
+	CatalogView,
+} from '../types.ts';
 
 // Creates a test that returns only one analyte/result.
-function singleAnalyteTest(code: string, name: string, resultCode = code): CatalogTestEntry {
+function singleAnalyteTest(
+	code: string,
+	name: string,
+	resultCode = code,
+): CatalogTestEntry {
 	return { code, name, analytes: [{ code: resultCode, name }] };
 }
 
@@ -50,11 +59,13 @@ const sysmexAnalytes: readonly CatalogAnalyteEntry[] =
 	}));
 
 // Sysmex returns multiple analytes/results for a single ordered test.
-const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_ORDER_CATALOG.map((t) => ({
-	code: t.code,
-	name: t.name,
-	analytes: sysmexAnalytes
-}));
+const sysmexTests: readonly CatalogTestEntry[] = SYSMEX_KX21N_ORDER_CATALOG.map(
+	(t) => ({
+		code: t.code,
+		name: t.name,
+		analytes: sysmexAnalytes,
+	}),
+);
 
 // Convert Kenza tests to the common catalog format.
 // Each Kenza assay produces one numeric result on the wire, so test and analyte share the same code.
@@ -67,7 +78,8 @@ const kenzaTests: readonly CatalogTestEntry[] = BIOLABO_KENZA_ORDER_CATALOG.map(
 // Batch duplicates stay in the reference catalog, not the order picker.
 const drAccuTests: readonly CatalogTestEntry[] = [
 	...new Map(DRACCU_AFI_6100B_CATALOG.map((test) => [
-		test.item_name, singleAnalyteTest(test.item_name, test.item_name, test.item_id),
+		test.item_name,
+		singleAnalyteTest(test.item_name, test.item_name, test.item_id),
 	])).values(),
 ];
 
@@ -124,12 +136,12 @@ const CATALOGS: readonly CatalogView[] = [
 		machine: 'DrAccu AFI-6100B',
 		tests: drAccuTests,
 	},
-	// The tested source has no fixed assay catalog. Order codes pass through unchanged.
+	// FAKE discovery catalog. The driver rejects its placeholder order code.
 	{
 		id: bonavera200MachineId,
 		driverId: bonavera200MachineId,
 		machine: 'Bonavera 200',
-		tests: [],
+		tests: BONAVERA_200_PLACEHOLDER_CATALOG,
 	},
 	{
 		id: bonaveraCountMachineId,
