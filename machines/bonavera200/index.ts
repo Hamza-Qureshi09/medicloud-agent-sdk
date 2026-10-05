@@ -26,7 +26,7 @@ const catalogCapturePath = './data/bonavera200-catalog-captures.jsonl';
 
 export class Bonavera200 extends BaseMachine {
 	static readonly id = bonavera200MachineId;
-	static readonly brand = 'Bonavera';
+	static readonly brand = 'BONAVERA-200';
 	static readonly protocol = {
 		name: 'HL7 over MLLP',
 		version: '2.3.1',

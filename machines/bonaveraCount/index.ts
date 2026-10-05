@@ -25,7 +25,7 @@ export const bonaveraCountMachineId = 'bonavera-count';
 
 export class BonaveraCount extends BaseMachine {
 	static readonly id = bonaveraCountMachineId;
-	static readonly brand = 'Biogeny';
+	static readonly brand = 'BIOGENY-BONAVERA-COUNT';
 	static readonly protocol = {
 		name: 'HL7 over MLLP',
 		version: '2.3.1',

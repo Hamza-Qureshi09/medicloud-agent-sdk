@@ -48,7 +48,7 @@ export const sysmexKx21nMachineId = 'sysmex-kx21n';
 
 export class SysmexKx21n extends BaseMachine {
     static readonly id = sysmexKx21nMachineId;
-    static readonly brand = 'SYSMEX';
+    static readonly brand = 'SYSMEX KX21N';
    static readonly protocol = { name: 'Sysmex KX fixed-width host output', version: 'Class A/Class B' } as const;
     static readonly transportType: DriverTransportType = 'serial';
     static readonly models = SYSMEX_KX21N_MODELS;
