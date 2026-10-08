@@ -8,6 +8,7 @@
  */
 
 import type { CatalogTestEntry } from '../../types.ts';
+import { managedCatalogTests } from '../../lib/catalogAccess.ts';
 
 export interface KenzaCatalogEntry {
 	readonly slot: number;
@@ -62,13 +63,18 @@ export const BIOLABO_KENZA_ORDER_CATALOG: readonly CatalogTestEntry[] =
 export function findKenzaAssay(value: string): KenzaCatalogEntry | undefined {
 	const normalized = normalizeCode(value);
 	const slotNumber = Number(normalized);
-	return BIOLABO_KENZA_240TX_CATALOG.find(
-		(e) =>
-			e.slot === slotNumber ||
-			normalizeCode(e.code) === normalized ||
-			normalizeCode(e.name) === normalized ||
-			e.aliases.some((alias) => normalizeCode(alias) === normalized),
+	const test = managedCatalogTests('biolabo-kenza').find((entry) =>
+		entry.slot === slotNumber ||
+		normalizeCode(entry.code) === normalized ||
+		normalizeCode(entry.name) === normalized ||
+		(entry.aliases ?? []).some((alias) => normalizeCode(alias) === normalized)
 	);
+	return test && {
+		slot: test.slot ?? 0,
+		code: test.code,
+		name: test.name,
+		aliases: test.aliases ?? [],
+	};
 }
 
 /**

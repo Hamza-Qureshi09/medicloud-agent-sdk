@@ -19,7 +19,8 @@ import {
     SysmexKx21nAstmProtocol,
     type SysmexKx21nFrame,
 } from './astm.ts';
-import { SYSMEX_KX21N_MODELS, SYSMEX_KX21N_ORDER_CATALOG } from './catalog.ts';
+import { SYSMEX_KX21N_MODELS } from './catalog.ts';
+import { managedCatalogTests } from '../../lib/catalogAccess.ts';
 import {
     looksLikeAstmPayload,
     parseSysmexKx21nPayload,
@@ -304,7 +305,7 @@ export class SysmexKx21n extends BaseMachine {
         }
         for (const test of order.tests) {
             if (
-                !SYSMEX_KX21N_ORDER_CATALOG.some((entry) =>
+                !managedCatalogTests(sysmexKx21nMachineId).some((entry) =>
                     entry.code === test?.trim()?.toUpperCase()
                 )
             ) {

@@ -25,7 +25,7 @@ export const handleOrderRoutes = async (
 	method: string,
 	segments: string[],
 ): Promise<Response> => {
-	// GET /orders with or without queryf
+	// GET /orders with or without query
 	if (segments.length === 0 && method === 'GET') {
 		const query = parseInput(
 			ListOrdersQuerySchema,

@@ -1,3 +1,6 @@
+import { managedCatalogTests } from '../../lib/catalogAccess.ts';
+import { sysmexKx21nMachineId } from './index.ts';
+
 /** Metadata for analytes received in KX-21/KX-21N result records. */
 
 export interface SysmexKx21nResultMetadata {
@@ -69,5 +72,14 @@ function analyte(
 export function findSysmexKx21nResultMetadata(
     code: string,
 ): SysmexKx21nResultMetadata | undefined {
-    return SYSMEX_KX21N_RESULT_METADATA.find((entry) => entry.code === code);
+    const analyte = managedCatalogTests(sysmexKx21nMachineId)
+        .flatMap((test) => test.analytes)
+        .find((entry) => entry.code === code);
+    return analyte && {
+        code: analyte.code,
+        name: analyte.name,
+        unit: analyte.unit ?? '',
+        category: analyte.category ?? '',
+        decimals: analyte.decimals ?? 0,
+    };
 }

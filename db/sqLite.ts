@@ -5,7 +5,10 @@ import { MachineOrderStore } from '../store/orderStore.ts';
 import { MachineResultStore } from '../store/resultStore.ts';
 import { MachineProfileStore } from '../store/profileStore.ts';
 import { MachineTestStatisticStore } from '../store/testStatisticStore.ts';
+import { CatalogStore } from '../store/catalogStore.ts';
+import { bindCatalogStore } from '../lib/catalogAccess.ts';
 import type {
+  IMachineCatalogStore,
   IMachineOrderStore,
   IMachineProfileStore,
   IMachineResultStore,
@@ -24,6 +27,7 @@ export class SqliteMachineDatabase implements IMachineSQLiteDB {
   private _orders?: MachineOrderStore;
   private _results?: MachineResultStore;
   private _testStatistics?: MachineTestStatisticStore;
+  private _catalogs?: CatalogStore;
 
   constructor(private readonly options: SqliteMachineDatabaseOptions) { }
 
@@ -59,6 +63,11 @@ export class SqliteMachineDatabase implements IMachineSQLiteDB {
     return this._testStatistics;
   }
 
+  get catalogs(): IMachineCatalogStore {
+    if (!this._catalogs) throw new Error('Database is not connected');
+    return this._catalogs;
+  }
+
   get connected(): boolean {
     return this.db !== undefined;
   }
@@ -66,12 +75,21 @@ export class SqliteMachineDatabase implements IMachineSQLiteDB {
   connect() {
     if (this.db) return; // singleton connection
 
-    this.db = this.openSqliteDatabase();
-
-    this._profiles = new MachineProfileStore(this.db);
-    this._orders = new MachineOrderStore(this.db);
-    this._results = new MachineResultStore(this.db);
-    this._testStatistics = new MachineTestStatisticStore(this.db);
+    const db = this.openSqliteDatabase();
+    try {
+      const catalogs = new CatalogStore(db);
+      catalogs.seedDefaults();
+      this.db = db;
+      this._profiles = new MachineProfileStore(db);
+      this._orders = new MachineOrderStore(db);
+      this._results = new MachineResultStore(db);
+      this._testStatistics = new MachineTestStatisticStore(db);
+      this._catalogs = catalogs;
+      bindCatalogStore(catalogs);
+    } catch (error) {
+      db.close();
+      throw error;
+    }
   }
 
   close(): void {
@@ -84,6 +102,8 @@ export class SqliteMachineDatabase implements IMachineSQLiteDB {
     this._orders = undefined;
     this._results = undefined;
     this._testStatistics = undefined;
+    this._catalogs = undefined;
+    bindCatalogStore(undefined);
   }
 
   /** DatabaseSync transactions must stay synchronous to prevent interleaving. */
@@ -243,6 +263,31 @@ export class SqliteMachineDatabase implements IMachineSQLiteDB {
           ON UPDATE CASCADE ON DELETE SET NULL
       );
       `);
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS machine_catalogs (
+        driver_id TEXT PRIMARY KEY COLLATE NOCASE,
+        machine TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS machine_catalog_tests (
+        driver_id TEXT NOT NULL COLLATE NOCASE,
+        code TEXT NOT NULL COLLATE NOCASE,
+        name TEXT NOT NULL,
+        analytes TEXT NOT NULL CHECK(json_valid(analytes) AND json_type(analytes) = 'array'),
+        aliases TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(aliases) AND json_type(aliases) = 'array'),
+        device_code TEXT,
+        unit TEXT,
+        normal_range TEXT,
+        category TEXT,
+        slot INTEGER CHECK(slot IS NULL OR slot > 0),
+        enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(driver_id, code),
+        FOREIGN KEY(driver_id) REFERENCES machine_catalogs(driver_id) ON DELETE CASCADE
+      );
+    `);
 
     // Indexes
     db.exec(`
