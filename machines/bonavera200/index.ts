@@ -10,17 +10,16 @@ import type {
 	MachineOrder,
 	MachineResultEvent,
 } from '../../types.ts';
-import { BONAVERA_200_PLACEHOLDER_TEST_CODE } from './catalog.ts';
+import { managedCatalogTests } from '../../lib/catalogAccess.ts';
 import { parseBonavera200Hl7 } from './inbound.ts';
 import { buildAck, buildDsrWithOrder, buildQck } from './outbound.ts';
+import { bonavera200MachineId } from '../../lib/constants.ts';
 
 export interface Bonavera200Config extends MachineConfig {
 	host: string;
 	port: number;
 	estimatedMinutes: number;
 }
-
-export const bonavera200MachineId = 'bonavera-200';
 
 const catalogCapturePath = './data/bonavera200-catalog-captures.jsonl';
 
@@ -140,10 +139,15 @@ export class Bonavera200 extends BaseMachine {
 				`Bonavera 200 order "${order.sampleId}" has no tests.`,
 			);
 		}
-		if (order.tests.includes(BONAVERA_200_PLACEHOLDER_TEST_CODE)) {
-			throw new Error(
-				'Bonavera 200 fake catalog code cannot be sent to the analyzer.',
-			);
+		const availableTests = new Set(
+			managedCatalogTests(bonavera200MachineId).map((test) => test.code),
+		);
+		for (const test of order.tests) {
+			if (!availableTests.has(test)) {
+				throw new Error(
+					`Bonavera 200 test "${test}" is not enabled in the catalog.`,
+				);
+			}
 		}
 		if (order.id !== undefined) {
 			for (const [sampleId, staged] of this.orders) {
@@ -253,6 +257,7 @@ export class Bonavera200 extends BaseMachine {
 				assayName: analyte.assayName,
 				unit: analyte.unit,
 			})),
+			// raw: result.raw ?? null,
 		};
 		await Deno.mkdir('./data', { recursive: true });
 		await Deno.writeTextFile(

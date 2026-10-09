@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import type { CatalogTestEntry } from '../types.ts';
 import { SqliteMachineDatabase } from '../db/sqLite.ts';
 import {
@@ -13,7 +14,11 @@ import { parseMaglumiMessage } from '../machines/maglumi800/inbound.ts';
 import { parseCobasC111Message } from '../machines/rocheCobasC111/inbound.ts';
 import { parseSysmexKx21nPayload } from '../machines/sysmexKx21n/inbound.ts';
 import { parseAstmMessage } from '../protocols/astm/records.ts';
-import { findStaticCatalog } from '../http/utils.ts';
+import { STATIC_CATALOGS } from '../http/utils.ts';
+import { findCobasC111Assay } from '../machines/rocheCobasC111/catalog.ts';
+import { Bonavera200 } from '../machines/bonavera200/index.ts';
+import { buildDsrWithOrder } from '../machines/bonavera200/outbound.ts';
+import { parseBonavera200Hl7 } from '../machines/bonavera200/inbound.ts';
 
 Deno.test('managed catalogs seed once, persist edits, and drive wire lookups', () => {
 	const directory = Deno.makeTempDirSync();
@@ -21,6 +26,8 @@ Deno.test('managed catalogs seed once, persist edits, and drive wire lookups', (
 	const database = new SqliteMachineDatabase({ path });
 	try {
 		database.connect();
+		assert.equal(database.catalogs.list().length, 8);
+		assert.equal(STATIC_CATALOGS.length, 0);
 		const iflash = database.catalogs.get('iflash3000');
 		assert(iflash);
 		assert.equal(iflash.source, 'database');
@@ -58,7 +65,14 @@ L|1|N`,
 		});
 		assert.equal(findMaglumiAssay('CUSTOM HCG')?.code, test.code);
 		database.close();
+		const priorDatabase = new DatabaseSync(path);
+		priorDatabase.exec('PRAGMA foreign_keys = ON');
+		priorDatabase.prepare(
+			"DELETE FROM machine_catalogs WHERE driver_id IN ('roche-cobas-c111', 'bonavera-count', 'bonavera-200')",
+		).run();
+		priorDatabase.close();
 		database.connect();
+		assert.equal(database.catalogs.list().length, 8);
 		assert.equal(findMaglumiAssay('CUSTOM HCG')?.code, test.code);
 		assert.equal(
 			database.catalogs.get('snibe-maglumi-800')?.tests.length,
@@ -140,7 +154,7 @@ L|1|N`,
 			parseAstmMessage('O|1|SAMPLE\rR|1|158|8.67|U/L'),
 			'test',
 		);
-		const cobas = findStaticCatalog('Roche cobas c111')?.tests.find((
+		const cobas = database.catalogs.get('roche-cobas-c111')?.tests.find((
 			entry,
 		) => entry.code === '158');
 		assert(cobas);
@@ -149,7 +163,64 @@ L|1|N`,
 			parsedCobas.result.results[0].assayNo,
 			cobas.analytes[0].code,
 		);
-		assert.equal(findStaticCatalog('Bonavera 200')?.source, 'static');
+		database.catalogs.upsertTest('roche-cobas-c111', {
+			...cobas,
+			aliases: [...(cobas.aliases ?? []), 'CUSTOM ALP'],
+		});
+		assert.equal(findCobasC111Assay('CUSTOM ALP')?.hostCode, '158');
+
+		const count = database.catalogs.get('bonavera-count');
+		assert.equal(count?.source, 'database');
+		assert.equal(count.tests[0].code, 'CBC');
+		assert(count.tests[0].analytes.some((entry) => entry.code === 'WBC'));
+
+		const bonavera = database.catalogs.get('bonavera-200');
+		assert.equal(bonavera?.source, 'database');
+		assert.equal(bonavera.tests.length, 23);
+		const calcium = bonavera.tests.find((entry) => entry.code === '0');
+		assert.equal(calcium?.name, 'Calcium');
+		assert.equal(calcium.enabled, true);
+		assert.equal(calcium.analytes[0].code, '0');
+		const calciumOrder = {
+			machineId: 1,
+			sampleId: '202610080006',
+			tests: ['0'],
+			createdAt: new Date(),
+			expiresAt: new Date(Date.now() + 60_000),
+		};
+		assert.doesNotThrow(() => new Bonavera200().sendOrder(calciumOrder));
+		assert(
+			buildDsrWithOrder('QUERY-1', calciumOrder).includes(
+				'DSP|29||0^^^|||',
+			),
+		);
+		const calciumResult = parseBonavera200Hl7([
+			[
+				'MSH',
+				'^~\\&',
+				'',
+				'',
+				'',
+				'',
+				'20261008000000',
+				'',
+				'ORU^R01',
+				'RESULT-0',
+				'P',
+				'2.3.1',
+			].join('|'),
+			'OBR|1|202610080006',
+			'OBX|1|NM|0|Calcium|9.2|mg/dL|||||F',
+		].join('\r'));
+		assert.equal(calciumResult.result?.payload.results[0].assayNo, '0');
+		assert.throws(
+			() =>
+				new Bonavera200().sendOrder({
+					...calciumOrder,
+					tests: ['BONAVERA_200_UNVERIFIED'],
+				}),
+			/not enabled in the catalog/,
+		);
 	} finally {
 		database.close();
 		for (const suffix of ['', '-wal', '-shm']) {

@@ -31,7 +31,11 @@ export const BIOLABO_KENZA_240TX_CATALOG: readonly KenzaCatalogEntry[] = [
 	entry(5, 'CR2', 'Creatinine', ['CREAT', 'CREATININE']),
 	entry(6, 'GL', 'Sugar', ['GLUCOSE', 'SUGAR', 'GLU']),
 	entry(7, 'BT1', 'T.Bilirubine', ['TBIL', 'T BILIRUBIN', 'TOTAL BILIRUBIN']),
-	entry(8, 'BD1', 'D.Bilirubine', ['DBIL', 'D BILIRUBIN', 'DIRECT BILIRUBIN']),
+	entry(8, 'BD1', 'D.Bilirubine', [
+		'DBIL',
+		'D BILIRUBIN',
+		'DIRECT BILIRUBIN',
+	]),
 	entry(9, 'AL2', 'GPT', ['ALT', 'GPT', 'ALANINE TRANSAMINASE']),
 	entry(10, 'AS2', 'GOT', ['AST', 'GOT', 'ASPARTATE TRANSAMINASE']),
 	entry(11, 'PH', 'Phosphorus', ['PHOS', 'PHOSPHORUS', 'PHOSPHATE']),
@@ -67,7 +71,9 @@ export function findKenzaAssay(value: string): KenzaCatalogEntry | undefined {
 		entry.slot === slotNumber ||
 		normalizeCode(entry.code) === normalized ||
 		normalizeCode(entry.name) === normalized ||
-		(entry.aliases ?? []).some((alias) => normalizeCode(alias) === normalized)
+		(entry.aliases ?? []).some((alias) =>
+			normalizeCode(alias) === normalized
+		)
 	);
 	return test && {
 		slot: test.slot ?? 0,

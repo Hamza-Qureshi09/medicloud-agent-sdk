@@ -33,6 +33,7 @@ import {
 	buildCobasC111ResultQuery,
 	type CobasC111HostSettings,
 } from './outbound.ts';
+import { rocheCobasC111MachineId } from '../../lib/constants.ts';
 
 export interface RocheCobasC111Config extends MachineConfig {
 	portName: string;
@@ -53,8 +54,6 @@ export interface RocheCobasC111Config extends MachineConfig {
 	defaultComment?: string;
 	trace: boolean;
 }
-
-export const rocheCobasC111MachineId = 'roche-cobas-c111';
 
 export class RocheCobasC111 extends BaseMachine {
 	static readonly id = rocheCobasC111MachineId;

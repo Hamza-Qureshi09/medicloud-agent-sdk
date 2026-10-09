@@ -55,6 +55,12 @@ function validateDriverTest(
 	) {
 		throw new HttpError('DrAccu tests require one numeric result item ID.');
 	}
+	if (driverId === 'bonavera-200' && !/^[0-9]+$/.test(test.code)) {
+		throw new HttpError('Bonavera 200 order codes must be numeric.');
+	}
+	if (driverId === 'bonavera-count' && test.code !== 'CBC') {
+		throw new HttpError('Bonavera Count supports only the CBC order code.');
+	}
 }
 
 function validateIdentifierConflicts(
@@ -63,6 +69,7 @@ function validateIdentifierConflicts(
 ): void {
 	if (
 		catalog.driverId !== 'snibe-maglumi-800' &&
+		catalog.driverId !== 'roche-cobas-c111' &&
 		catalog.driverId !== 'biolabo-kenza'
 	) return;
 	const normalize = catalog.driverId === 'biolabo-kenza'
@@ -196,7 +203,6 @@ export async function handleCatalogRoutes(
 		if (method === 'PUT') {
 			const input = await parseJson(request, CatalogTestSchema);
 			validateDriverTest(driverId, input);
-			validateIdentifierConflicts(catalog, input);
 			validateIdentifierConflicts(catalog, input);
 			if (input.code.toLowerCase() !== code.toLowerCase()) {
 				throw new HttpError(

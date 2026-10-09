@@ -8,7 +8,7 @@ export interface IFlashTestEntry {
 }
 
 export const YHLO_IFLASH_3000_MODELS = [
-	'yhlo-iflash-3000'
+	'yhlo-iflash-3000',
 ] as const;
 
 export type IFlashVariant = '1800' | '3000';
@@ -138,7 +138,9 @@ export function findIFlashTestEntry(
 	if (!test) return undefined;
 	const channelNumber = Number(test.analytes[0]?.code);
 	if (!Number.isSafeInteger(channelNumber) || channelNumber <= 0) {
-		throw new Error(`iFlash ${variant} test "${testCode}" needs a numeric channel analyte.`);
+		throw new Error(
+			`iFlash ${variant} test "${testCode}" needs a numeric channel analyte.`,
+		);
 	}
 	return {
 		testCode: test.code,
