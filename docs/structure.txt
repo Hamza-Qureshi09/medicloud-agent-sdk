@@ -115,7 +115,7 @@ MAGLUMI 800 structure
 ---------------------
 sdk_v3/machines/maglumi800/
   maglumi800.ts  Driver lifecycle and workflow
-  astm.ts        MAGLUMI ASTM option selection
+  astm_test.ts   MAGLUMI protocol and TCP integration regression tests
   inbound.ts     MAGLUMI query/result parsing
   outbound.ts    MAGLUMI worklist/no-order ASTM response builders
   catalog.ts     MAGLUMI assay catalog and device-code mapping
@@ -125,8 +125,8 @@ MAGLUMI 800 flow
 1. Registry creates Maglumi800 from the registered driver.
 2. Maglumi800.configure validates profile config.
 3. Maglumi800.connect creates MachineCom using tcp-server config.
-4. Maglumi800 creates AstmProtocol with MAGLUMI_800_ASTM_OPTIONS.
-5. AstmProtocol receives simplified ASTM records and passes them to the driver.
+4. Maglumi800 creates Maglumi800AstmProtocol from protocols/astm/variants/maglumi800.ts.
+5. The Maglumi variant acknowledges ENQ, STX, the record body, ETX, and EOT separately before passing complete records to the driver.
 6. inbound.ts detects Q records, query-all requests, and result records.
 7. Driver replies to Q records using outbound.ts.
 8. Query-all replies send staged non-testing orders up to the legacy cap of 20.
@@ -246,24 +246,12 @@ SNIBE MAGLUMI 800 protocol migration notes
 - Reference source: src/drivers/snibe-maglumi-800/.
 - Protocol type: ASTM E1394-97 style over TCP/IP.
 - Transport: TCP server, analyzer connects to the SDK.
-- Tested framing from src:
-  - ENQ
-  - ACK
-  - STX
-  - records separated by CR
-  - ETX
-  - EOT
-  - no frame number
-  - no checksum
-- sdk_v3 machine option file:
-  - sdk_v3/machines/maglumi800/astm.ts
-- Expected Maglumi ASTM options from tested src:
-  - receiveFrameNumber: optional
-  - receiveChecksum: none
-  - sendFrameNumber: false
-  - sendChecksum: false
-  - finalTerminator: etx
-  - sendRecordsInSingleFrame: true
+- Manual section 16.6 requires staged ENQ, STX, record body, ETX, and EOT.
+- Each stage receives its own ACK in both directions.
+- No frame number or checksum is used.
+- The Maglumi variant lives at protocols/astm/variants/maglumi800.ts.
+- Normal AstmProtocol and other analyzer variants are unchanged.
+- See docs/maglumi800-lis.md for the failure explanation and lab retest steps.
 - No Maglumi fixed estimate is configured in the driver.
 - Registry learned test statistics provide estimatedDurationMinutes when
   history exists.
