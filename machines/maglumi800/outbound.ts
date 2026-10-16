@@ -1,5 +1,7 @@
 import type { MachineOrder } from '../../types.ts';
 import {
+	astmField,
+	type AstmRecord,
 	buildAstmRecord,
 	escapeAstmText,
 	joinAstmRepeats,
@@ -9,7 +11,6 @@ import { toMaglumiDeviceCode } from './catalog.ts';
 function nowStamp(): string {
 	const date = new Date();
 	const pad = (value: number) => String(value).padStart(2, '0');
-
 	return `${date.getFullYear()}${pad(date.getMonth() + 1)}${
 		pad(date.getDate())
 	}` +
@@ -18,23 +19,43 @@ function nowStamp(): string {
 		}`;
 }
 
-function header(): string {
+function header(requestHeader?: AstmRecord): string {
 	return buildAstmRecord([
 		'H',
 		'\\^&',
 		'',
 		'PSWD',
-		'Lis',
+		requestHeader ? astmField(requestHeader, 10) || 'Lis' : 'Lis',
 		'',
 		'',
 		'',
 		'',
-		'Maglumi User',
+		requestHeader
+			? astmField(requestHeader, 5) || 'Maglumi 800'
+			: 'Maglumi 800',
 		'',
 		'P',
 		'E1394-97',
 		nowStamp(),
 	]);
+}
+
+function birthDate(value = ''): string {
+	const match = /^(\d{4})-?(\d{2})-?(\d{2})(?:T.*)?$/.exec(value);
+	return match ? `${match[1]}${match[2]}${match[3]}` : '';
+}
+
+function sexCode(value = ''): string {
+	switch (value.trim().toLowerCase()) {
+		case 'm':
+		case 'male':
+			return 'M';
+		case 'f':
+		case 'female':
+			return 'F';
+		default:
+			return 'U';
+	}
 }
 
 function patientRecord(order: MachineOrder): string {
@@ -47,8 +68,8 @@ function patientRecord(order: MachineOrder): string {
 		escapeAstmText(patientId),
 		escapeAstmText(order.patientName ?? ''),
 		'',
-		order.dob ?? '',
-		order.sex ?? '',
+		birthDate(order.dob),
+		sexCode(order.sex),
 	]);
 }
 
@@ -58,12 +79,10 @@ function orderRecord(order: MachineOrder): string {
 			`^^^${escapeAstmText(toMaglumiDeviceCode(test))}`
 		),
 	);
-
 	const fields: string[] = new Array(12).fill('');
 	fields[0] = 'O';
 	fields[1] = '1';
 	fields[2] = escapeAstmText(order.sampleId);
-	fields[3] = '';
 	fields[4] = testField;
 	fields[5] = 'R';
 	fields[6] = nowStamp();
@@ -71,21 +90,20 @@ function orderRecord(order: MachineOrder): string {
 	return buildAstmRecord(fields);
 }
 
-function terminator(code = 'N'): string {
-	return buildAstmRecord(['L', '1', code]);
-}
-
 export function buildMaglumiWorklistResponse(
 	orders: readonly MachineOrder[],
+	requestHeader?: AstmRecord,
 ): string[] {
-	const records = [header()];
+	const records = [header(requestHeader)];
 	for (const order of orders) {
 		records.push(patientRecord(order), orderRecord(order));
 	}
-	records.push(terminator('N'));
+	records.push(buildAstmRecord(['L', '1', 'N']));
 	return records;
 }
 
-export function buildMaglumiNoOrderResponse(): string[] {
-	return [header(), terminator('N')];
+export function buildMaglumiNoOrderResponse(
+	requestHeader?: AstmRecord,
+): string[] {
+	return [header(requestHeader), buildAstmRecord(['L', '1', 'N'])];
 }

@@ -13,3 +13,5 @@ export const maglumi800MachineId = 'snibe-maglumi-800';
 export const iFlash3000MachineId = 'iflash3000';
 
 export const drAccuAfi6100bMachineId = 'draccu-afi-6100b';
+
+export const MILLISECONDS_PER_MINUTE = 60_000;

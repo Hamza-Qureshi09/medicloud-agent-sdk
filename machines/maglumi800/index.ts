@@ -1,5 +1,7 @@
 import * as z from '@zod/zod';
 import { BaseMachine } from '../../abstracts/baseMachine.ts';
+import type { BaseProtocol } from '../../abstracts/baseProtocol.ts';
+import type { AstmRecord } from '../../protocols/astm/records.ts';
 import type {
 	DriverConfigField,
 	DriverTransportType,
@@ -9,9 +11,8 @@ import type {
 	TransportSpec,
 } from '../../types.ts';
 import { delay } from '../../lib/utils.ts';
-import { AstmProtocol } from '../../protocols/astm/link.ts';
+import { Maglumi800AstmProtocol } from '../../protocols/astm/variants/maglumi800.ts';
 import { MachineCom } from '../../transports/machineCom.ts';
-import { MAGLUMI_800_ASTM_OPTIONS } from './astm.ts';
 import { MAGLUMI_800_MODELS } from './catalog.ts';
 import {
 	parseMaglumiMessage,
@@ -28,6 +29,7 @@ export interface Maglumi800Config extends MachineConfig {
 	host: string;
 	port: number;
 	queryReplyDelayMs?: number;
+	traceProtocol?: boolean;
 }
 
 const DEFAULT_QUERY_REPLY_DELAY_MS = 0;
@@ -45,10 +47,20 @@ export class Maglumi800 extends BaseMachine {
 		host: z.string().trim().min(1, 'Host is required'),
 		port: z.number().int().min(1).max(65535),
 		queryReplyDelayMs: z.number().int().min(0).optional(),
+		traceProtocol: z.boolean().optional(),
 	}).strict() satisfies MachineConfigSchema<Maglumi800Config>;
 
 	// for frontend fields generation
 	static readonly configFields = [
+		{
+			key: 'traceProtocol',
+			label: 'Trace Maglumi protocol',
+			type: 'boolean',
+			required: false,
+			default: false,
+			hint:
+				'Log raw communication bytes for LIS troubleshooting. Includes patient and sample data.',
+		},
 		{
 			key: 'host',
 			label: 'Host',
@@ -82,7 +94,7 @@ export class Maglumi800 extends BaseMachine {
 	private configuration?: Maglumi800Config;
 	private readonly pendingOrders = new Map<string, MachineOrder>();
 	private readonly deliveredResults = new Set<string>();
-	private protocol?: AstmProtocol;
+	private protocol?: Maglumi800AstmProtocol;
 
 	constructor() {
 		super();
@@ -108,13 +120,13 @@ export class Maglumi800 extends BaseMachine {
 		this.watchConnection(com);
 
 		// initialize astm protocol
-		this.protocol = new AstmProtocol(this.com, {
-			...MAGLUMI_800_ASTM_OPTIONS,
+		this.protocol = new Maglumi800AstmProtocol(this.com, {
+			traceProtocol: config.traceProtocol,
 			loggerScope: 'Maglumi800:ASTM',
 			onMessage: (records, protocol, context) =>
 				this.handleAstmMessage(
 					records,
-					protocol as unknown as AstmProtocol,
+					protocol,
 					context.remoteAddr,
 				),
 			onError: (error) => this.handleError(error),
@@ -296,7 +308,7 @@ export class Maglumi800 extends BaseMachine {
 
 	private async handleAstmMessage(
 		records: Parameters<typeof rawMaglumiRecords>[0],
-		protocol: AstmProtocol,
+		protocol: BaseProtocol<AstmRecord[], string[]>,
 		remoteAddr?: Deno.Addr,
 	): Promise<void> {
 		const raw = rawMaglumiRecords(records);
@@ -305,20 +317,23 @@ export class Maglumi800 extends BaseMachine {
 
 		if (parsed.kind === 'query') {
 			const sampleId = parsed.querySampleId ?? '';
+			const requestHeader = records.find((record) => record.type === 'H');
 			await this.emit('order-query', { sampleId, raw });
-			if (!this.requireConfiguration()) return; // extra check to verify that config exist or not
 
 			const orders = this.findOrdersForQuery(
 				sampleId,
 				parsed.queryAll === true,
 			);
-			if (orders?.length === 0) {
+			if (orders.length === 0) {
 				await this.delayBeforeQueryReply();
-				await protocol.send(buildMaglumiNoOrderResponse());
+				await protocol.send(buildMaglumiNoOrderResponse(requestHeader));
 				return;
 			}
 
-			const response = buildMaglumiWorklistResponse(orders);
+			const response = buildMaglumiWorklistResponse(
+				orders,
+				requestHeader,
+			);
 			await this.delayBeforeQueryReply();
 			await protocol.send(response);
 

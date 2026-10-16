@@ -1,3 +1,4 @@
+import { MILLISECONDS_PER_MINUTE } from './lib/constants.ts';
 import { ZodError } from '@zod/zod';
 import { BaseMachine } from './abstracts/baseMachine.ts';
 import { SqliteMachineDatabase } from './db/sqLite.ts';
@@ -899,13 +900,17 @@ export class MachineRegistry {
 						`Cannot mark order testing: missing order id for sample=${order.sampleId}`,
 					);
 				}
+				const prepared = this.withLearnedEstimate(order);
+				const sentAt = order.sentAt ?? new Date();
+				const startedAt = order.startedAt ?? sentAt;
+				const duration = prepared.estimatedDurationMinutes;
 				this.database.orders.update(order.id, {
 					status: 'testing',
-					sentAt: order.sentAt,
-					startedAt: order.startedAt,
-					estimatedDurationMinutes: order.estimatedDurationMinutes ??
-						null,
-					estimatedCompletionAt: order.estimatedCompletionAt ?? null,
+					sentAt,
+					startedAt,
+					estimatedDurationMinutes: duration ?? null,
+					estimatedCompletionAt: duration === undefined ? null :
+						new Date(startedAt.getTime() + duration * MILLISECONDS_PER_MINUTE),
 				});
 			},
 			result: (result) => this.persistResult(machineId, result),
@@ -1092,7 +1097,7 @@ export class MachineRegistry {
 			order.tests,
 		);
 		if (durationMs !== undefined) {
-			preparedOrder.estimatedDurationMinutes = durationMs / 60_000;
+			preparedOrder.estimatedDurationMinutes = durationMs / MILLISECONDS_PER_MINUTE;
 		}
 
 		return preparedOrder;

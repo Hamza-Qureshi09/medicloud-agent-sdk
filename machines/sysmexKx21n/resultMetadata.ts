@@ -1,5 +1,5 @@
 import { managedCatalogTests } from '../../lib/catalogAccess.ts';
-import { sysmexKx21nMachineId } from './index.ts';
+import { sysmexKx21nMachineId } from '../../lib/constants.ts';
 
 /** Metadata for analytes received in KX-21/KX-21N result records. */
 
