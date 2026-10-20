@@ -30,6 +30,7 @@ export interface Maglumi800Config extends MachineConfig {
 	port: number;
 	queryReplyDelayMs?: number;
 	traceProtocol?: boolean;
+	framing?: 'numbered' | 'staged';
 }
 
 const DEFAULT_QUERY_REPLY_DELAY_MS = 0;
@@ -48,10 +49,27 @@ export class Maglumi800 extends BaseMachine {
 		port: z.number().int().min(1).max(65535),
 		queryReplyDelayMs: z.number().int().min(0).optional(),
 		traceProtocol: z.boolean().optional(),
+		framing: z.enum(['numbered', 'staged']).optional(),
 	}).strict() satisfies MachineConfigSchema<Maglumi800Config>;
 
 	// for frontend fields generation
 	static readonly configFields = [
+		{
+			key: 'framing',
+			label: 'ASTM framing',
+			type: 'select',
+			required: false,
+			default: 'numbered',
+			options: [
+				{ value: 'numbered', label: 'Numbered frames with checksum' },
+				{
+					value: 'staged',
+					label: 'Staged handshake (manual section 16.6)',
+				},
+			],
+			hint:
+				'Use numbered for frames starting with 1H. Use staged for the separate STX/ACK handshake.',
+		},
 		{
 			key: 'traceProtocol',
 			label: 'Trace Maglumi protocol',
@@ -121,6 +139,7 @@ export class Maglumi800 extends BaseMachine {
 
 		// initialize astm protocol
 		this.protocol = new Maglumi800AstmProtocol(this.com, {
+			framing: config.framing,
 			traceProtocol: config.traceProtocol,
 			loggerScope: 'Maglumi800:ASTM',
 			onMessage: (records, protocol, context) =>
